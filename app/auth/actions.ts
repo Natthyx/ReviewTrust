@@ -2,7 +2,6 @@
 
 import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
-import { redirect } from 'next/navigation'
 import { getRedirectPath } from '@/lib/auth/redirects'
 import { RegisterUserData, RegisterBusinessData } from '@/lib/auth/types'
 
@@ -21,7 +20,7 @@ export async function registerUser(data: RegisterUserData) {
         emailRedirectTo: `${process.env.NEXT_PUBLIC_SITE_URL}/auth/callback`,
         data: {
           name: data.name,
-          role: data.role,
+          role: "user",
         }
       },
     })
@@ -38,6 +37,7 @@ export async function registerUser(data: RegisterUserData) {
     if (authData.user && !authData.user.identities) {
       return { error: 'Account already exists. Please sign in instead.' }
     }
+    
 
     // Success → return OK so we can redirect cleanly after
     return { success: true }
@@ -63,7 +63,7 @@ export async function registerBusiness(data: RegisterBusinessData) {
         emailRedirectTo: `${process.env.NEXT_PUBLIC_SITE_URL}/auth/callback`,
         data: {
           name: data.name,
-          role: data.role,
+          role: "business",
         }
       },
     })
@@ -131,6 +131,9 @@ export async function loginUser(email: string, password: string) {
       // This is a critical error - user exists but profile doesn't
       return { error: 'User profile not found. Please contact support.' }
     }
+    
+    // If this is a business user, check if they have a business record
+    // If not, we might need to create one (but we'll handle this on the client side)
     
     const redirectPath = getRedirectPath({
       id: user.id,

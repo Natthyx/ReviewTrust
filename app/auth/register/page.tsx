@@ -21,7 +21,10 @@ export default function RegisterPage() {
     email: "",
     password: "",
     confirmPassword: "",
-    fullName: ""
+    fullName: "",
+    businessName: "",
+    location: "",
+    website: ""
   })
   const router = useRouter()
 
@@ -85,11 +88,14 @@ export default function RegisterPage() {
           window.location.href = '/auth/login?message=check_email'
         }
       } else {
-        // Register business (same as user for now, business info will be added later)
+        // Register business with business information
         const businessData = {
           email: formData.email,
           password: formData.password,
           name: formData.fullName,
+          businessName: formData.businessName,
+          location: formData.location,
+          website: formData.website,
           role: userType
         }
         
@@ -176,7 +182,10 @@ export default function RegisterPage() {
                       email: "",
                       password: "",
                       confirmPassword: "",
-                      fullName: ""
+                      fullName: "",
+                      businessName: "",
+                      location: "",
+                      website: ""
                     })
                   }}
                   className={`flex-1 py-2 rounded text-sm font-medium transition-all ${
@@ -267,6 +276,54 @@ export default function RegisterPage() {
                       required 
                     />
                   </div>
+                  
+                  {userType === "business" && (
+                    <>
+                      <div>
+                        <Label htmlFor="businessName" className="text-sm font-medium">
+                          Business Name
+                        </Label>
+                        <Input 
+                          id="businessName" 
+                          name="businessName"
+                          placeholder="Acme Inc." 
+                          className="mt-2" 
+                          value={formData.businessName}
+                          onChange={handleInputChange}
+                          required 
+                        />
+                      </div>
+                      
+                      <div>
+                        <Label htmlFor="location" className="text-sm font-medium">
+                          Location
+                        </Label>
+                        <Input 
+                          id="location" 
+                          name="location"
+                          placeholder="New York, NY" 
+                          className="mt-2" 
+                          value={formData.location}
+                          onChange={handleInputChange}
+                        />
+                      </div>
+                      
+                      <div>
+                        <Label htmlFor="website" className="text-sm font-medium">
+                          Website
+                        </Label>
+                        <Input 
+                          id="website" 
+                          name="website"
+                          type="url"
+                          placeholder="https://example.com" 
+                          className="mt-2" 
+                          value={formData.website}
+                          onChange={handleInputChange}
+                        />
+                      </div>
+                    </>
+                  )}
                   
                   <div className="flex items-start gap-2">
                     <Checkbox id="terms" className="mt-1" required />

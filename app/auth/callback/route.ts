@@ -16,12 +16,10 @@ export async function GET(request: Request) {
       const { error } = await supabase.auth.exchangeCodeForSession(code);
 
       if (!error) {
-        return NextResponse.redirect(
-          request.url.replace(
-            "/auth/callback",
-            "/auth/login?message=email_verified"
-          )
-        );
+        // Construct proper redirect URL
+        const redirectUrl = new URL('/auth/login', request.url);
+        redirectUrl.searchParams.set('message', 'email_verified');
+        return NextResponse.redirect(redirectUrl.toString());
       }
     }
 
@@ -33,29 +31,21 @@ export async function GET(request: Request) {
       });
 
       if (!error) {
-        return NextResponse.redirect(
-          request.url.replace(
-            "/auth/callback",
-            "/auth/login?message=email_verified"
-          )
-        );
+        // Construct proper redirect URL
+        const redirectUrl = new URL('/auth/login', request.url);
+        redirectUrl.searchParams.set('message', 'email_verified');
+        return NextResponse.redirect(redirectUrl.toString());
       }
     }
 
     // Fallback redirect on error
-    return NextResponse.redirect(
-      request.url.replace(
-        "/auth/callback",
-        "/auth/login?error=invalid_token"
-      )
-    );
+    const redirectUrl = new URL('/auth/login', request.url);
+    redirectUrl.searchParams.set('error', 'invalid_token');
+    return NextResponse.redirect(redirectUrl.toString());
   } catch (err) {
     console.error("Email verification error:", err);
-    return NextResponse.redirect(
-      request.url.replace(
-        "/auth/callback",
-        "/auth/login?error=verification_failed"
-      )
-    );
+    const redirectUrl = new URL('/auth/login', request.url);
+    redirectUrl.searchParams.set('error', 'verification_failed');
+    return NextResponse.redirect(redirectUrl.toString());
   }
 }

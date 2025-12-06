@@ -3,7 +3,7 @@ import { Navbar } from "@/components/navbar"
 export default function PrivacyPage() {
   return (
     <>
-      <Navbar role="guest" />
+      <Navbar />
       <main className="min-h-screen py-12 px-4">
         <article className="container-app max-w-3xl">
           <h1 className="text-4xl font-bold mb-2">Privacy Policy</h1>

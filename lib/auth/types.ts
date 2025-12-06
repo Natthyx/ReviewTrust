@@ -21,8 +21,16 @@ export interface RegisterUserData {
   role: UserRole
 }
 
-// Simplify business registration to match user registration
-export interface RegisterBusinessData extends RegisterUserData {}
+// Business registration data with additional business information
+export interface RegisterBusinessData {
+  email: string
+  password: string
+  name: string
+  businessName: string
+  location?: string
+  website?: string
+  role: UserRole
+}
 
 export interface LoginCredentials {
   email: string

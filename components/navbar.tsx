@@ -154,13 +154,13 @@ export function Navbar() {
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end" className="w-48">
                     <DropdownMenuItem asChild>
-                      <Link href="/profile" className="gap-2">
+                      <Link href="/user/profile" className="gap-2">
                         <User className="w-4 h-4" />
                         Profile
                       </Link>
                     </DropdownMenuItem>
                     <DropdownMenuItem asChild>
-                      <Link href="/profile/settings" className="gap-2">
+                      <Link href="/user/settings" className="gap-2">
                         <Settings className="w-4 h-4" />
                         Settings
                       </Link>
@@ -216,7 +216,7 @@ export function Navbar() {
                         </Button>
                       )}
                       <Button variant="outline" asChild className="w-full bg-transparent">
-                        <Link href="/profile">Profile</Link>
+                        <Link href="/user/profile">Profile</Link>
                       </Button>
                     </>
                   )}

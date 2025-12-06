@@ -73,7 +73,7 @@ export default function ExplorePage() {
 
   return (
     <>
-      <Navbar role="guest" />
+      <Navbar/>
       <main className="min-h-screen">
         <div className="container-app py-8">
           {/* Header */}
