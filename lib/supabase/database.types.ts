@@ -112,6 +112,11 @@ export type Database = {
           rating_count: number | null
           created_at: string | null
           updated_at: string | null
+          business_hours: Json | null
+          latitude: number | null
+          longitude: number | null
+          phone: string | null
+          address: string | null
         }
         Insert: {
           id?: string
@@ -124,6 +129,11 @@ export type Database = {
           rating_count?: number | null
           created_at?: string | null
           updated_at?: string | null
+          business_hours?: Json | null
+          latitude?: number | null
+          longitude?: number | null
+          phone?: string | null
+          address?: string | null
         }
         Update: {
           id?: string
@@ -136,6 +146,11 @@ export type Database = {
           rating_count?: number | null
           created_at?: string | null
           updated_at?: string | null
+          business_hours?: Json | null
+          latitude?: number | null
+          longitude?: number | null
+          phone?: string | null
+          address?: string | null
         }
         Relationships: [
           {

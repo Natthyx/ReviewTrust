@@ -14,6 +14,7 @@ import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { RatingStars } from "@/components/rating-stars"
 import { Plus, X, ChevronDown, ChevronRight } from "lucide-react"
+import { BusinessHoursInput } from "@/components/business-hours-input"
 
 interface BusinessData {
   id: string
@@ -22,6 +23,11 @@ interface BusinessData {
   website: string | null
   description: string | null
   rating_count: number | null
+  phone: string | null
+  address: string | null
+  latitude: number | null
+  longitude: number | null
+  business_hours: any | null
 }
 
 interface Category {
@@ -43,6 +49,20 @@ interface BusinessSubcategory {
   subcategory_id: string
 }
 
+interface FormData {
+  business_name: string
+  description: string
+  location: string
+  website: string
+  categoryId: string
+  subcategoryId: string
+  phone: string
+  address: string
+  latitude: string
+  longitude: string
+  businessHours: string // This will now hold JSON string
+}
+
 export default function BusinessProfile() {
   const [business, setBusiness] = useState<BusinessData | null>(null)
   const [categories, setCategories] = useState<Category[]>([])
@@ -54,13 +74,18 @@ export default function BusinessProfile() {
   const [saving, setSaving] = useState(false)
   const [success, setSuccess] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<FormData>({
     business_name: "",
     description: "",
     location: "",
     website: "",
     categoryId: "",
-    subcategoryId: ""
+    subcategoryId: "",
+    phone: "",
+    address: "",
+    latitude: "",
+    longitude: "",
+    businessHours: "{}" // Initialize as empty JSON object string
   })
   const router = useRouter()
   const supabase = createClient()
@@ -100,7 +125,7 @@ export default function BusinessProfile() {
         // Fetch business data
         const { data: businessData, error: businessError } = await supabase
           .from('businesses')
-          .select('id, business_name, location, website, description, rating_count')
+          .select('id, business_name, location, website, description, rating_count, phone, address, latitude, longitude, business_hours')
           .eq('business_owner_id', user.id)
           .single()
 
@@ -117,7 +142,13 @@ export default function BusinessProfile() {
           location: businessData.location || "",
           website: businessData.website || "",
           categoryId: "",
-          subcategoryId: ""
+          subcategoryId: "",
+          phone: businessData.phone || "",
+          address: businessData.address || "",
+          latitude: businessData.latitude ? businessData.latitude.toString() : "",
+          longitude: businessData.longitude ? businessData.longitude.toString() : "",
+          businessHours: businessData.business_hours ? JSON.stringify(businessData.business_hours) : "{}"
+
         })
 
         // Fetch all categories
@@ -381,7 +412,12 @@ export default function BusinessProfile() {
           business_name: formData.business_name,
           description: formData.description,
           location: formData.location,
-          website: formData.website
+          website: formData.website,
+          phone: formData.phone,
+          address: formData.address,
+          latitude: formData.latitude ? parseFloat(formData.latitude) : null,
+          longitude: formData.longitude ? parseFloat(formData.longitude) : null,
+          business_hours: formData.businessHours ? JSON.parse(formData.businessHours) : null
         })
         .eq('id', business.id)
         .eq('business_owner_id', user.id)
@@ -398,7 +434,12 @@ export default function BusinessProfile() {
         business_name: formData.business_name,
         description: formData.description,
         location: formData.location,
-        website: formData.website
+        website: formData.website,
+        phone: formData.phone,
+        address: formData.address,
+        latitude: formData.latitude ? parseFloat(formData.latitude) : null,
+        longitude: formData.longitude ? parseFloat(formData.longitude) : null,
+        business_hours: formData.businessHours ? JSON.parse(formData.businessHours) : null
       })
 
       setSuccess('Business information updated successfully!')
@@ -654,6 +695,75 @@ export default function BusinessProfile() {
                       value={formData.website}
                       onChange={handleInputChange}
                       className="mt-2" 
+                    />
+                  </div>
+
+                  <div>
+                    <Label htmlFor="phone" className="text-sm font-medium">
+                      Phone Number
+                    </Label>
+                    <Input 
+                      id="phone" 
+                      name="phone"
+                      value={formData.phone}
+                      onChange={handleInputChange}
+                      className="mt-2" 
+                      placeholder="+1 (555) 123-4567"
+                    />
+                  </div>
+
+                  <div>
+                    <Label htmlFor="address" className="text-sm font-medium">
+                      Address
+                    </Label>
+                    <Textarea 
+                      id="address" 
+                      name="address"
+                      value={formData.address}
+                      onChange={handleInputChange}
+                      className="mt-2" 
+                      placeholder="123 Main Street, City, State ZIP"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <Label htmlFor="latitude" className="text-sm font-medium">
+                        Latitude
+                      </Label>
+                      <Input 
+                        id="latitude" 
+                        name="latitude"
+                        value={formData.latitude}
+                        onChange={handleInputChange}
+                        className="mt-2" 
+                        placeholder="40.7128"
+                        type="number"
+                        step="any"
+                      />
+                    </div>
+                    
+                    <div>
+                      <Label htmlFor="longitude" className="text-sm font-medium">
+                        Longitude
+                      </Label>
+                      <Input 
+                        id="longitude" 
+                        name="longitude"
+                        value={formData.longitude}
+                        onChange={handleInputChange}
+                        className="mt-2" 
+                        placeholder="-74.0060"
+                        type="number"
+                        step="any"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <BusinessHoursInput 
+                      value={formData.businessHours}
+                      onChange={(value) => setFormData(prev => ({ ...prev, businessHours: value }))}
                     />
                   </div>
                   

@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Navbar } from "@/components/navbar"
 import { ServiceCard } from "@/components/service-card"
 import { Button } from "@/components/ui/button"
@@ -8,68 +8,70 @@ import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet"
 import { Search, Filter, Star } from "lucide-react"
+import { useSearchParams } from 'next/navigation'
+
+interface Service {
+  id: string
+  name: string
+  image: string
+  category: string
+  rating: number
+  reviewCount: number
+  location?: string
+  description?: string
+}
 
 export default function ExplorePage() {
   const [searchQuery, setSearchQuery] = useState("")
   const [selectedCategory, setSelectedCategory] = useState("all")
   const [sortBy, setSortBy] = useState("rating")
+  const [services, setServices] = useState<Service[]>([])
+  const [loading, setLoading] = useState(true)
+  const searchParams = useSearchParams()
+  
+  // Get subcategory from URL params
+  const subcategoryParam = searchParams.get('subcategory')
 
-  const services = [
-    {
-      id: "1",
-      name: "Excellence Healthcare Center",
-      image: "/modern-hospital-exterior.png",
-      category: "Healthcare",
-      rating: 4.8,
-      reviewCount: 1243,
-      location: "New York, NY",
-    },
-    {
-      id: "2",
-      name: "Gourmet Kitchen Restaurant",
-      image: "/cozy-italian-restaurant.png",
-      category: "Restaurant",
-      rating: 4.6,
-      reviewCount: 892,
-      location: "San Francisco, CA",
-    },
-    {
-      id: "3",
-      name: "Premium Tech Services",
-      image: "/interconnected-tech.png",
-      category: "Technology",
-      rating: 4.7,
-      reviewCount: 654,
-      location: "Austin, TX",
-    },
-    {
-      id: "4",
-      name: "Urban Salon & Spa",
-      image: "/hair-salon-interior.png",
-      category: "Beauty",
-      rating: 4.5,
-      reviewCount: 1156,
-      location: "Los Angeles, CA",
-    },
-    {
-      id: "5",
-      name: "Smart Electric Solutions",
-      image: "/electrical-components.png",
-      category: "Services",
-      rating: 4.4,
-      reviewCount: 523,
-      location: "Chicago, IL",
-    },
-    {
-      id: "6",
-      name: "Fresh Market Grocery",
-      image: "/busy-grocery-aisle.png",
-      category: "Retail",
-      rating: 4.3,
-      reviewCount: 789,
-      location: "Seattle, WA",
-    },
-  ]
+  useEffect(() => {
+    fetchBusinesses()
+  }, [searchQuery, sortBy, subcategoryParam])
+
+  const fetchBusinesses = async () => {
+    try {
+      setLoading(true)
+      
+      // Build query parameters
+      const params = new URLSearchParams()
+      if (searchQuery) params.append('search', searchQuery)
+      if (subcategoryParam) params.append('subcategory', subcategoryParam)
+      if (sortBy) params.append('sort', sortBy)
+      
+      const response = await fetch(`/api/explore?${params.toString()}`)
+      const data = await response.json()
+      
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to fetch businesses')
+      }
+      
+      // Transform data to match ServiceCard expectations
+      const transformedServices = data.map((business: any) => ({
+        id: business.id,
+        name: business.name,
+        image: "/placeholder-service-image.svg", // Placeholder image
+        category: "Service", // Default category
+        rating: business.rating || 0,
+        reviewCount: business.reviewCount || 0,
+        location: business.location || "",
+        description: business.description || ""
+      }))
+      
+      setServices(transformedServices)
+      setLoading(false)
+    } catch (error) {
+      console.error('Error fetching businesses:', error)
+      setLoading(false)
+    }
+  }
 
   return (
     <>
@@ -145,12 +147,28 @@ export default function ExplorePage() {
             </Sheet>
           </div>
 
+          {/* Loading State */}
+          {loading && (
+            <div className="flex justify-center py-12">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+            </div>
+          )}
+
           {/* Results Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {services.map((service) => (
-              <ServiceCard key={service.id} {...service} />
-            ))}
-          </div>
+          {!loading && (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {services.map((service) => (
+                <ServiceCard key={service.id} {...service} />
+              ))}
+            </div>
+          )}
+
+          {/* Empty State */}
+          {!loading && services.length === 0 && (
+            <div className="text-center py-12">
+              <p className="text-muted-foreground">No services found matching your criteria.</p>
+            </div>
+          )}
 
           {/* Pagination */}
           <div className="flex items-center justify-center gap-2 mt-12">

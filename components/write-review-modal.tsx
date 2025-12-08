@@ -7,26 +7,81 @@ import { Textarea } from "@/components/ui/textarea"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { RatingStars } from "./rating-stars"
+import { createClient } from '@/lib/supabase/client'
+import { toast } from "sonner"
 
 interface WriteReviewModalProps {
   open?: boolean
   onOpenChange?: (open: boolean) => void
   businessName?: string
+  businessId?: string
+  onReviewSubmitted?: () => void
 }
 
-export function WriteReviewModal({ open = false, onOpenChange, businessName = "Service" }: WriteReviewModalProps) {
+export function WriteReviewModal({ 
+  open = false, 
+  onOpenChange, 
+  businessName = "Service",
+  businessId,
+  onReviewSubmitted
+}: WriteReviewModalProps) {
   const [rating, setRating] = useState(0)
   const [title, setTitle] = useState("")
   const [content, setContent] = useState("")
   const [step, setStep] = useState(1)
+  const [submitting, setSubmitting] = useState(false)
 
-  const handleSubmit = () => {
-    // Handle review submission
-    onOpenChange?.(false)
-    setRating(0)
-    setTitle("")
-    setContent("")
-    setStep(1)
+  const handleSubmit = async () => {
+    if (!businessId) {
+      toast.error("Business information is missing")
+      return
+    }
+
+    setSubmitting(true)
+    
+    try {
+      const supabase = createClient()
+      
+      // Get current user
+      const { data: { user }, error: userError } = await supabase.auth.getUser()
+      
+      if (userError || !user) {
+        toast.error("You must be logged in to submit a review")
+        setSubmitting(false)
+        return
+      }
+      
+      // Submit review
+      const { error } = await supabase
+        .from('reviews')
+        .insert({
+          rating,
+          comment: content,
+          reviewee_id: businessId,
+          reviewer_id: user.id,
+          is_verified: false // Could be set to true for verified users
+        })
+      
+      if (error) {
+        console.error('Error submitting review:', error)
+        toast.error("Failed to submit review. Please try again.")
+      } else {
+        toast.success("Review submitted successfully!")
+        onReviewSubmitted?.()
+        onOpenChange?.(false)
+        
+        // Reset form
+        setRating(0)
+        setTitle("")
+        setContent("")
+        setStep(1)
+      }
+    } catch (error) {
+      console.error('Error submitting review:', error)
+      toast.error("An unexpected error occurred. Please try again.")
+    } finally {
+      setSubmitting(false)
+    }
   }
 
   return (
@@ -91,8 +146,12 @@ export function WriteReviewModal({ open = false, onOpenChange, businessName = "S
                 <Button variant="outline" className="flex-1 bg-transparent" onClick={() => setStep(1)}>
                   Back
                 </Button>
-                <Button className="flex-1" disabled={!title || !content} onClick={handleSubmit}>
-                  Submit Review
+                <Button 
+                  className="flex-1" 
+                  disabled={!title || !content || submitting} 
+                  onClick={handleSubmit}
+                >
+                  {submitting ? "Submitting..." : "Submit Review"}
                 </Button>
               </div>
             </>

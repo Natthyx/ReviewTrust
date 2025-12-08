@@ -6,182 +6,220 @@ import { RatingStars } from "@/components/rating-stars"
 import { Badge } from "@/components/ui/badge"
 import { MapPin, Phone, Globe, Clock, ChevronDown } from "lucide-react"
 import Image from "next/image"
-import { useBannedUserCheck } from "@/hooks/useBannedUserCheck"
+import { createClient } from '@supabase/supabase-js'
+import { Database } from '@/lib/supabase/database.types'
+import { ServiceClientWrapper } from "@/components/service-client-wrapper"
 
-export default function ServiceDetailPage() {
-  // Check if user is banned (for public pages, we don't redirect immediately)
-  useBannedUserCheck('public', false)
-
-  return (
-    <>
-      <Navbar />
-      <main className="min-h-screen">
-        {/* Hero & Images */}
-        <section className="bg-muted">
-          <div className="container-app py-8">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
-              <div className="md:col-span-2 relative h-96 rounded-lg overflow-hidden">
-                <Image src="/hospital-professional.jpg" alt="Service" fill className="object-cover" />
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                {[1, 2, 3, 4].map((i) => (
-                  <div key={i} className="relative h-[180px] rounded-lg overflow-hidden">
-                    <Image
-                      src={`/helpful-service.png?height=180&width=180&query=service ${i}`}
-                      alt={`Gallery ${i}`}
-                      fill
-                      className="object-cover hover:scale-105 transition-transform cursor-pointer"
-                    />
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        </section>
-
-        {/* Details & Reviews */}
-        <section className="py-12">
-          <div className="container-app">
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-              {/* Main Content */}
-              <div className="lg:col-span-2 space-y-8">
-                {/* Header */}
-                <div>
-                  <div className="flex items-start justify-between gap-4 mb-4">
-                    <div>
-                      <h1 className="text-3xl font-bold">Excellence Healthcare Center</h1>
-                      <div className="flex items-center gap-4 mt-3">
-                        <RatingStars rating={4.8} totalReviews={1243} />
-                        <Badge variant="secondary">Healthcare</Badge>
-                      </div>
-                    </div>
-                    <Button size="lg">Write a Review</Button>
-                  </div>
-                  
-                  <p className="text-muted-foreground mt-4">
-                    Excellence Healthcare Center is dedicated to providing top-quality medical care with compassion and expertise. 
-                    Our team of experienced professionals is committed to your health and well-being.
-                  </p>
-                </div>
-
-                {/* Contact Info */}
-                <Card className="p-6">
-                  <h2 className="text-xl font-semibold mb-4">Contact Information</h2>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="flex items-center gap-3">
-                      <MapPin className="w-5 h-5 text-muted-foreground" />
-                      <div>
-                        <p className="font-medium">Address</p>
-                        <p className="text-sm text-muted-foreground">123 Medical Plaza, Suite 100<br />New York, NY 10001</p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <Phone className="w-5 h-5 text-muted-foreground" />
-                      <div>
-                        <p className="font-medium">Phone</p>
-                        <p className="text-sm text-muted-foreground">(555) 123-4567</p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <Globe className="w-5 h-5 text-muted-foreground" />
-                      <div>
-                        <p className="font-medium">Website</p>
-                        <p className="text-sm text-muted-foreground">www.excellencehc.com</p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <Clock className="w-5 h-5 text-muted-foreground" />
-                      <div>
-                        <p className="font-medium">Hours</p>
-                        <p className="text-sm text-muted-foreground">Mon-Fri: 8AM-6PM<br />Sat: 9AM-2PM</p>
-                      </div>
-                    </div>
-                  </div>
-                </Card>
-
-                {/* Reviews Section */}
-                <div>
-                  <div className="flex items-center justify-between mb-6">
-                    <h2 className="text-2xl font-bold">Customer Reviews</h2>
-                    <Button variant="outline" className="gap-2">
-                      Sort by <ChevronDown className="w-4 h-4" />
-                    </Button>
-                  </div>
-
-                  <div className="space-y-6">
-                    {[1, 2, 3].map((i) => (
-                      <ReviewCard
-                        key={i}
-                        author={`Customer ${i}`}
-                        rating={5}
-                        title="Outstanding Service"
-                        content="The staff at Excellence Healthcare Center is incredibly professional and caring. 
-                        I received excellent treatment and would highly recommend them to anyone."
-                        date="2 days ago"
-                        verified
-                        likes={24}
-                      />
-                    ))}
-                  </div>
-
-                  <div className="mt-8 text-center">
-                    <Button variant="outline">Load More Reviews</Button>
-                  </div>
-                </div>
-              </div>
-
-              {/* Sidebar */}
-              <div className="space-y-6">
-                <Card className="p-6">
-                  <h3 className="font-semibold mb-4">Business Hours</h3>
-                  <ul className="space-y-2 text-sm">
-                    <li className="flex justify-between">
-                      <span>Monday</span>
-                      <span>8:00 AM - 6:00 PM</span>
-                    </li>
-                    <li className="flex justify-between">
-                      <span>Tuesday</span>
-                      <span>8:00 AM - 6:00 PM</span>
-                    </li>
-                    <li className="flex justify-between">
-                      <span>Wednesday</span>
-                      <span>8:00 AM - 6:00 PM</span>
-                    </li>
-                    <li className="flex justify-between">
-                      <span>Thursday</span>
-                      <span>8:00 AM - 6:00 PM</span>
-                    </li>
-                    <li className="flex justify-between">
-                      <span>Friday</span>
-                      <span>8:00 AM - 6:00 PM</span>
-                    </li>
-                    <li className="flex justify-between">
-                      <span>Saturday</span>
-                      <span>9:00 AM - 2:00 PM</span>
-                    </li>
-                    <li className="flex justify-between">
-                      <span>Sunday</span>
-                      <span>Closed</span>
-                    </li>
-                  </ul>
-                </Card>
-
-                <Card className="p-6">
-                  <h3 className="font-semibold mb-4">Location</h3>
-                  <div className="aspect-video bg-muted rounded-lg relative overflow-hidden">
-                    <Image 
-                      src="/map-placeholder.png" 
-                      alt="Location map" 
-                      fill 
-                      className="object-cover"
-                    />
-                  </div>
-                </Card>
-              </div>
-            </div>
-          </div>
-        </section>
-      </main>
-    </>
+// Create a public client for read-only operations
+const createPublicClient = () => {
+  return createClient<Database>(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
   )
+}
+
+// Define types for our business data
+type Business = {
+  id: string
+  name: string
+  location: string | null
+  address: string | null
+  phone: string | null
+  website: string | null
+  latitude: number | null
+  longitude: number | null
+  businessHours: any | null
+  description: string | null
+  rating: number
+  reviewCount: number
+  createdAt: string | null
+  updatedAt: string | null
+  categories: { id: string; name: string; icon: string | null; bg_color: string | null }[]
+  subcategories: { id: string; name: string }[]
+}
+
+type Review = {
+  id: string
+  rating: number
+  comment: string | null
+  reviewer_name: string | null
+  created_at: string | null
+  is_verified: boolean | null
+}
+
+// Fetch business data
+async function getBusinessData(slug: string): Promise<{business: Business | null, reviews: Review[]}> {
+  try {
+    const supabase = createPublicClient()
+    
+    // For now, we'll treat the slug as the business ID
+    // In a real implementation, you might have a separate slug field
+    const { data: business, error: businessError } = await supabase
+      .from('businesses')
+      .select(`
+        id,
+        business_name,
+        location,
+        description,
+        website,
+        phone,
+        address,
+        latitude,
+        longitude,
+        business_hours,
+        rating_count,
+        created_at,
+        updated_at,
+        business_owner_id,
+        is_banned,
+        business_categories(
+          category_id,
+          categories(
+            id,
+            name,
+            icon,
+            bg_color
+          )
+        ),
+        business_subcategories(
+          subcategory_id,
+          subcategories(
+            id,
+            name
+          )
+        )
+      `)
+      .eq('id', slug)
+      .eq('is_banned', false)
+      .single()
+    
+    if (businessError) {
+      console.error('Error fetching business:', businessError)
+      return {business: null, reviews: []}
+    }
+    
+    // Fetch average rating and review count
+    const { data: reviewsData, error: reviewsError } = await supabase
+      .from('reviews')
+      .select(`
+        id,
+        rating,
+        comment,
+        created_at,
+        is_verified,
+        profiles(name)
+      `)
+      .eq('reviewee_id', slug)
+      .order('created_at', { ascending: false })
+    
+    let averageRating = 0
+    let reviewCount = 0
+    let reviews: Review[] = []
+    
+    if (!reviewsError && reviewsData) {
+      reviewCount = reviewsData.length
+      if (reviewCount > 0) {
+        const totalRating = reviewsData.reduce((sum, review) => sum + review.rating, 0)
+        averageRating = Math.round((totalRating / reviewCount) * 10) / 10 // Round to 1 decimal place
+        
+        // Process reviews
+        reviews = reviewsData.map(review => ({
+          id: review.id,
+          rating: review.rating,
+          comment: review.comment,
+          reviewer_name: review.profiles?.name || 'Anonymous User',
+          created_at: review.created_at || null,
+          is_verified: review.is_verified || false
+        }))
+      }
+    }
+    
+    // Process the business data
+    const processedBusiness: Business = {
+      id: business.id,
+      name: business.business_name,
+      location: business.location,
+      address: business.address,
+      phone: business.phone,
+      website: business.website,
+      latitude: business.latitude,
+      longitude: business.longitude,
+      businessHours: business.business_hours,
+      description: business.description,
+      rating: averageRating,
+      reviewCount: reviewCount,
+      createdAt: business.created_at,
+      updatedAt: business.updated_at,
+      categories: business.business_categories.map((bc: any) => bc.categories),
+      subcategories: business.business_subcategories.map((bs: any) => bs.subcategories)
+    }
+    
+    return {business: processedBusiness, reviews}
+  } catch (error) {
+    console.error('Error fetching business details:', error)
+    return {business: null, reviews: []}
+  }
+}
+
+export default async function ServiceDetailPage({ params }: { params: Promise<{ slug: string }> }) {
+  // Await params to get the actual values
+  const { slug } = await params
+  
+  const { business, reviews } = await getBusinessData(slug)
+  
+  // If business not found, show a 404-like message
+  if (!business) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <h1 className="text-2xl font-bold mb-4">Business Not Found</h1>
+          <p className="text-muted-foreground">The business you're looking for doesn't exist or has been removed.</p>
+        </div>
+      </div>
+    )
+  }
+
+  // Format business hours for display
+  const formatBusinessHours = () => {
+    if (!business.businessHours) {
+      // Return default hours if not set
+      return [
+        { day: 'Monday', hours: '8:00 AM - 6:00 PM' },
+        { day: 'Tuesday', hours: '8:00 AM - 6:00 PM' },
+        { day: 'Wednesday', hours: '8:00 AM - 6:00 PM' },
+        { day: 'Thursday', hours: '8:00 AM - 6:00 PM' },
+        { day: 'Friday', hours: '8:00 AM - 6:00 PM' },
+        { day: 'Saturday', hours: '9:00 AM - 2:00 PM' },
+        { day: 'Sunday', hours: 'Closed' },
+      ]
+    }
+    
+    // Parse and format business hours from JSON
+    try {
+      const hours = typeof business.businessHours === 'string' 
+        ? JSON.parse(business.businessHours) 
+        : business.businessHours
+      
+      return Object.entries(hours).map(([day, hours]) => ({
+        day,
+        hours: hours as string
+      }))
+    } catch (e) {
+      // Fallback to default hours if parsing fails
+      return [
+        { day: 'Monday', hours: '8:00 AM - 6:00 PM' },
+        { day: 'Tuesday', hours: '8:00 AM - 6:00 PM' },
+        { day: 'Wednesday', hours: '8:00 AM - 6:00 PM' },
+        { day: 'Thursday', hours: '8:00 AM - 6:00 PM' },
+        { day: 'Friday', hours: '8:00 AM - 6:00 PM' },
+        { day: 'Saturday', hours: '9:00 AM - 2:00 PM' },
+        { day: 'Sunday', hours: 'Closed' },
+      ]
+    }
+  }
+
+  const businessHours = formatBusinessHours()
+
+  // Pass data to client wrapper
+  return <ServiceClientWrapper business={business} reviews={reviews} businessHours={businessHours} />
 }
