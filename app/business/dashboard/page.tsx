@@ -29,10 +29,22 @@ interface BusinessData {
   location: string | null
   website: string | null
   rating_count: number | null
+  description: string | null
+}
+
+interface ReviewData {
+  id: string
+  rating: number
+  comment: string | null
+  created_at: string | null
+  reviewer: {
+    name: string | null
+  } | null
 }
 
 export default function BusinessDashboard() {
   const [business, setBusiness] = useState<BusinessData | null>(null)
+  const [reviews, setReviews] = useState<ReviewData[]>([])
   const [loading, setLoading] = useState(true)
   const [showSetup, setShowSetup] = useState(false)
   const [setupData, setSetupData] = useState({
@@ -57,7 +69,7 @@ export default function BusinessDashboard() {
         // Fetch business data
         const { data: businessData, error: businessError } = await supabase
           .from('businesses')
-          .select('id, business_name, location, website, rating_count')
+          .select('id, business_name, location, website, rating_count, description')
           .eq('business_owner_id', user.id)
           .single()
 
@@ -80,6 +92,24 @@ export default function BusinessDashboard() {
           }
         } else {
           setBusiness(businessData)
+          
+          // Fetch recent reviews
+          const { data: reviewsData, error: reviewsError } = await supabase
+            .from('reviews')
+            .select(`
+              id,
+              rating,
+              comment,
+              created_at,
+              reviewer:profiles(name)
+            `)
+            .eq('reviewee_id', businessData.id)
+            .order('created_at', { ascending: false })
+            .limit(5)
+          
+          if (!reviewsError) {
+            setReviews(reviewsData || [])
+          }
         }
 
         setLoading(false)
@@ -140,12 +170,20 @@ export default function BusinessDashboard() {
     }
   }
 
+  // Calculate average rating from reviews
+  const calculateAverageRating = () => {
+    if (reviews.length === 0) return 0
+    const total = reviews.reduce((sum, review) => sum + review.rating, 0)
+    return total / reviews.length
+  }
+
+  // Prepare data for charts
   const ratingData = [
-    { stars: 5, count: business?.rating_count ? Math.floor(business.rating_count * 0.45) : 450 },
-    { stars: 4, count: business?.rating_count ? Math.floor(business.rating_count * 0.28) : 280 },
-    { stars: 3, count: business?.rating_count ? Math.floor(business.rating_count * 0.12) : 120 },
-    { stars: 2, count: business?.rating_count ? Math.floor(business.rating_count * 0.045) : 45 },
-    { stars: 1, count: business?.rating_count ? Math.floor(business.rating_count * 0.02) : 20 },
+    { stars: 5, count: reviews.filter(r => r.rating === 5).length },
+    { stars: 4, count: reviews.filter(r => r.rating === 4).length },
+    { stars: 3, count: reviews.filter(r => r.rating === 3).length },
+    { stars: 2, count: reviews.filter(r => r.rating === 2).length },
+    { stars: 1, count: reviews.filter(r => r.rating === 1).length },
   ]
 
   const viewsData = [
@@ -285,8 +323,8 @@ export default function BusinessDashboard() {
           {/* Stats */}
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
             {[
-              { icon: Star, label: "Average Rating", value: "4.8", color: "text-yellow-500" },
-              { icon: MessageSquare, label: "Total Reviews", value: business?.rating_count?.toString() || "0", color: "text-blue-500" },
+              { icon: Star, label: "Average Rating", value: calculateAverageRating().toFixed(1), color: "text-yellow-500" },
+              { icon: MessageSquare, label: "Total Reviews", value: reviews.length.toString(), color: "text-blue-500" },
               { icon: Users, label: "Profile Views", value: "4.5K", color: "text-purple-500" },
               { icon: TrendingUp, label: "Avg Response Time", value: "2h 30m", color: "text-green-500" },
             ].map((stat, idx) => {
@@ -350,6 +388,42 @@ export default function BusinessDashboard() {
                   <Line type="monotone" dataKey="clicks" stroke="var(--color-accent)" strokeWidth={2} />
                 </LineChart>
               </ResponsiveContainer>
+            </Card>
+          </div>
+
+          {/* Recent Reviews */}
+          <div className="mb-8">
+            <Card className="p-6">
+              <h3 className="font-semibold mb-4">Recent Reviews</h3>
+              {reviews.length > 0 ? (
+                <div className="space-y-4">
+                  {reviews.map((review) => (
+                    <div key={review.id} className="border-b border-border pb-4 last:border-0 last:pb-0">
+                      <div className="flex justify-between">
+                        <div>
+                          <p className="font-medium">{review.reviewer?.name || 'Anonymous'}</p>
+                          <div className="flex items-center mt-1">
+                            {[...Array(5)].map((_, i) => (
+                              <Star
+                                key={i}
+                                className={`w-4 h-4 ${i < review.rating ? 'text-yellow-500 fill-yellow-500' : 'text-gray-300'}`}
+                              />
+                            ))}
+                          </div>
+                        </div>
+                        <span className="text-sm text-muted-foreground">
+                          {review.created_at ? new Date(review.created_at).toLocaleDateString() : 'Unknown date'}
+                        </span>
+                      </div>
+                      {review.comment && (
+                        <p className="text-muted-foreground mt-2 text-sm">{review.comment}</p>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-muted-foreground text-center py-4">No reviews yet</p>
+              )}
             </Card>
           </div>
 

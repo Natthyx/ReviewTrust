@@ -148,6 +148,7 @@ export type Database = {
           document_url: string
           document_name: string | null
           uploaded_at: string | null
+          status: string | null
         }
         Insert: {
           id?: string
@@ -155,6 +156,7 @@ export type Database = {
           document_url: string
           document_name?: string | null
           uploaded_at?: string | null
+          status?: string | null
         }
         Update: {
           id?: string
@@ -162,6 +164,7 @@ export type Database = {
           document_url?: string
           document_name?: string | null
           uploaded_at?: string | null
+          status?: string | null
         }
         Relationships: [
           {

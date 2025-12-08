@@ -45,6 +45,7 @@ const adminItems: SidebarItem[] = [
   { label: "Users", href: "/admin/users", icon: <Users className="w-4 h-4" /> },
   { label: "Businesses", href: "/admin/businesses", icon: <Building2 className="w-4 h-4" /> },
   { label: "Categories", href: "/admin/categories", icon: <Shield className="w-4 h-4" /> },
+  { label: "Documents", href: "/admin/documents", icon: <FileText className="w-4 h-4" /> },
   { label: "Reviews", href: "/admin/reviews", icon: <MessageSquare className="w-4 h-4" /> },
   { label: "Blog Posts", href: "/admin/blog", icon: <FileText className="w-4 h-4" /> },
   { label: "Settings", href: "/admin/settings", icon: <Settings className="w-4 h-4" /> },

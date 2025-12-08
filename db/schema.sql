@@ -48,7 +48,8 @@ CREATE TABLE business_documents (
   business_id UUID REFERENCES businesses(id) ON DELETE CASCADE NOT NULL,
   document_url TEXT NOT NULL,
   document_name TEXT,
-  uploaded_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+  uploaded_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  status TEXT DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'rejected'))
 );
 
 -- Business categories junction table (many-to-many)

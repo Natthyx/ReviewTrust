@@ -1,0 +1,311 @@
+"use client"
+
+import { useEffect, useState } from "react"
+import { useRouter } from "next/navigation"
+import { createClient } from "@/lib/supabase/client"
+import { Navbar } from "@/components/navbar"
+import { Sidebar } from "@/components/sidebar"
+import { Card } from "@/components/ui/card"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Badge } from "@/components/ui/badge"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { Search, CheckCircle, XCircle, FileText } from "lucide-react"
+
+interface Document {
+  id: string
+  document_name: string | null
+  document_url: string
+  uploaded_at: string | null
+  status: string | null
+  business: {
+    business_name: string | null
+  } | null
+}
+
+export default function AdminDocumentsPage() {
+  const [documents, setDocuments] = useState<Document[]>([])
+  const [filteredDocuments, setFilteredDocuments] = useState<Document[]>([])
+  const [loading, setLoading] = useState(true)
+  const [openDialog, setOpenDialog] = useState(false)
+  const [selectedDocument, setSelectedDocument] = useState<Document | null>(null)
+  const [searchTerm, setSearchTerm] = useState("")
+  const router = useRouter()
+  const supabase = createClient()
+
+  useEffect(() => {
+    const fetchDocuments = async () => {
+      try {
+        // Get current user
+        const { data: { user }, error: userError } = await supabase.auth.getUser()
+        
+        if (userError || !user) {
+          router.push('/auth/login')
+          return
+        }
+
+        // Check if user is admin
+        const { data: profile, error: profileError } = await supabase
+          .from('profiles')
+          .select('role')
+          .eq('id', user.id)
+          .single()
+
+        if (profileError || !profile || profile.role !== 'admin') {
+          router.push('/admin/login')
+          return
+        }
+
+        // Fetch all documents with business info
+        const { data: documentsData, error: documentsError } = await supabase
+          .from('business_documents')
+          .select(`
+            id,
+            document_name,
+            document_url,
+            uploaded_at,
+            status,
+            business:businesses(business_name)
+          `)
+          .order('uploaded_at', { ascending: false })
+
+        if (documentsError) {
+          console.error('Error fetching documents:', documentsError)
+        } else {
+          setDocuments(documentsData || [])
+          setFilteredDocuments(documentsData || [])
+        }
+
+        setLoading(false)
+      } catch (error) {
+        console.error('Error:', error)
+        router.push('/auth/login')
+      }
+    }
+
+    fetchDocuments()
+  }, [router])
+
+  useEffect(() => {
+    // Filter documents based on search term
+    if (!searchTerm) {
+      setFilteredDocuments(documents)
+    } else {
+      const filtered = documents.filter(doc => 
+        (doc.document_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        doc.business?.business_name?.toLowerCase().includes(searchTerm.toLowerCase()))
+      )
+      setFilteredDocuments(filtered)
+    }
+  }, [searchTerm, documents])
+
+  const handleApprove = async () => {
+    if (!selectedDocument) return
+
+    try {
+      const { error } = await supabase
+        .from('business_documents')
+        .update({ status: 'approved' })
+        .eq('id', selectedDocument.id)
+
+      if (error) {
+        console.error('Error approving document:', error)
+        return
+      }
+
+      // Update local state
+      setDocuments(prev => 
+        prev.map(doc => 
+          doc.id === selectedDocument.id ? { ...doc, status: 'approved' } : doc
+        )
+      )
+      
+      setOpenDialog(false)
+      setSelectedDocument(null)
+    } catch (error) {
+      console.error('Error approving document:', error)
+    }
+  }
+
+  const handleReject = async () => {
+    if (!selectedDocument) return
+
+    try {
+      const { error } = await supabase
+        .from('business_documents')
+        .update({ status: 'rejected' })
+        .eq('id', selectedDocument.id)
+
+      if (error) {
+        console.error('Error rejecting document:', error)
+        return
+      }
+
+      // Update local state
+      setDocuments(prev => 
+        prev.map(doc => 
+          doc.id === selectedDocument.id ? { ...doc, status: 'rejected' } : doc
+        )
+      )
+      
+      setOpenDialog(false)
+      setSelectedDocument(null)
+    } catch (error) {
+      console.error('Error rejecting document:', error)
+    }
+  }
+
+  if (loading) {
+    return (
+      <>
+        <Navbar />
+        <main className="flex min-h-[calc(100vh-4rem)]">
+          <Sidebar role="admin" />
+          <div className="flex-1 ml-64 p-8">
+            <div className="mb-8">
+              <h1 className="text-3xl font-bold">Documents</h1>
+              <p className="text-muted-foreground mt-2">Review and approve business documents</p>
+            </div>
+            <div className="flex items-center justify-center h-64">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+            </div>
+          </div>
+        </main>
+      </>
+    )
+  }
+
+  return (
+    <>
+      <Navbar />
+      <main className="flex min-h-[calc(100vh-4rem)]">
+        <Sidebar role="admin" />
+        <div className="flex-1 ml-64 p-8">
+          <div className="mb-8">
+            <h1 className="text-3xl font-bold">Documents</h1>
+            <p className="text-muted-foreground mt-2">Review and approve business documents</p>
+          </div>
+
+          {/* Search */}
+          <div className="mb-6">
+            <div className="relative max-w-md">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+              <Input 
+                placeholder="Search documents or businesses..." 
+                className="pl-10" 
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+              />
+            </div>
+          </div>
+
+          {/* Table */}
+          <Card>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Document Name</TableHead>
+                  <TableHead>Business</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Uploaded</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {filteredDocuments.length > 0 ? (
+                  filteredDocuments.map((doc) => (
+                    <TableRow key={doc.id}>
+                      <TableCell className="font-medium">
+                        <div className="flex items-center gap-2">
+                          <FileText className="w-4 h-4 text-muted-foreground" />
+                          {doc.document_name || "Unnamed Document"}
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-sm">
+                        {doc.business?.business_name || "Unknown Business"}
+                      </TableCell>
+                      <TableCell>
+                        <Badge
+                          variant={
+                            doc.status === "approved"
+                              ? "default"
+                              : doc.status === "pending"
+                                ? "secondary"
+                                : "destructive"
+                          }
+                        >
+                          {doc.status ? doc.status.charAt(0).toUpperCase() + doc.status.slice(1) : "Pending"}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-sm text-muted-foreground">
+                        {doc.uploaded_at ? new Date(doc.uploaded_at).toLocaleDateString() : "Unknown date"}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        {doc.status === "pending" && (
+                          <Button
+                            size="sm"
+                            onClick={() => {
+                              setSelectedDocument(doc)
+                              setOpenDialog(true)
+                            }}
+                          >
+                            Review
+                          </Button>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  ))
+                ) : (
+                  <TableRow>
+                    <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
+                      No documents found
+                    </TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </Card>
+
+          {/* Approval Dialog */}
+          <Dialog open={openDialog} onOpenChange={setOpenDialog}>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Review Document</DialogTitle>
+                <DialogDescription>
+                  {selectedDocument?.document_name || "Unnamed Document"}
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4 py-4">
+                <div>
+                  <h4 className="font-semibold mb-2">Document Details</h4>
+                  <div className="space-y-2 text-sm">
+                    <p>
+                      <span className="text-muted-foreground">Document:</span> {selectedDocument?.document_name || "Unnamed Document"}
+                    </p>
+                    <p>
+                      <span className="text-muted-foreground">Business:</span> {selectedDocument?.business?.business_name || "Unknown Business"}
+                    </p>
+                    <p>
+                      <span className="text-muted-foreground">Uploaded:</span> {selectedDocument?.uploaded_at ? new Date(selectedDocument.uploaded_at).toLocaleDateString() : "Unknown date"}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex gap-2 pt-4 border-t border-border">
+                  <Button variant="outline" className="flex-1 bg-transparent gap-2" onClick={handleReject}>
+                    <XCircle className="w-4 h-4" />
+                    Reject
+                  </Button>
+                  <Button className="flex-1 gap-2" onClick={handleApprove}>
+                    <CheckCircle className="w-4 h-4" />
+                    Approve
+                  </Button>
+                </div>
+              </div>
+            </DialogContent>
+          </Dialog>
+        </div>
+      </main>
+    </>
+  )
+}
