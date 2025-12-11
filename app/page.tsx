@@ -1,5 +1,6 @@
 "use client"
 
+import { useEffect, useState } from "react"
 import { Navbar } from "@/components/navbar"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
@@ -8,42 +9,86 @@ import { ServiceCard } from "@/components/service-card"
 import { Star, TrendingUp, Award, Users } from "lucide-react"
 import Link from "next/link"
 
-export default function HomePage() {
-  const categories = [
-    { id: "1", name: "Healthcare", count: 128, icon: "🏥", description: "Medical and health services" },
-    { id: "2", name: "Restaurants", count: 256, icon: "🍽️", description: "Dining and culinary experiences" },
-    { id: "3", name: "Automotive", count: 89, icon: "🚗", description: "Car services and repairs" },
-    { id: "4", name: "Home Services", count: 142, icon: "🏠", description: "Home improvement and maintenance" },
-    { id: "5", name: "Technology", count: 76, icon: "💻", description: "Tech services and support" },
-    { id: "6", name: "Beauty", count: 95, icon: "💄", description: "Beauty and personal care" },
-  ]
+interface Stat {
+  icon: React.ComponentType<{ className?: string }>
+  label: string
+  value: string
+}
 
-  const featuredServices = [
-    {
-      id: "1",
-      name: "Excellence Dental Care",
-      category: "Healthcare",
-      rating: 4.9,
-      reviewCount: 124,
-      imageUrl: "/service-images/dental.jpg",
-    },
-    {
-      id: "2",
-      name: "Gourmet Bistro",
-      category: "Restaurants",
-      rating: 4.7,
-      reviewCount: 89,
-      imageUrl: "/service-images/restaurant.jpg",
-    },
-    {
-      id: "3",
-      name: "Tech Solutions Pro",
-      category: "Technology",
-      rating: 4.8,
-      reviewCount: 67,
-      imageUrl: "/service-images/technology.jpg",
-    },
-  ]
+interface Category {
+  id: string
+  name: string
+  count: number
+  icon: string
+  description: string
+  bg_color?: string
+}
+
+interface Service {
+  id: string
+  name: string
+  category: string
+  rating: number
+  reviewCount: number
+  imageUrl: string
+}
+
+export default function HomePage() {
+  const [stats, setStats] = useState<Stat[]>([
+    { icon: Users, label: "Happy Users", value: "0" },
+    { icon: Star, label: "Verified Reviews", value: "0" },
+    { icon: Award, label: "Trusted Businesses", value: "0" },
+    { icon: TrendingUp, label: "Monthly Growth", value: "0%" },
+  ])
+  
+  const [categories, setCategories] = useState<Category[]>([])
+  const [featuredServices, setFeaturedServices] = useState<Service[]>([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        const response = await fetch('/api/landing')
+        const data = await response.json()
+        
+        if (!response.ok) {
+          throw new Error(data.error || 'Failed to fetch landing page data')
+        }
+        
+        // Format stats with real data
+        setStats([
+          { icon: Users, label: "Happy Users", value: formatNumber(data.stats.users) },
+          { icon: Star, label: "Verified Reviews", value: formatNumber(data.stats.reviews) },
+          { icon: Award, label: "Trusted Businesses", value: formatNumber(data.stats.businesses) },
+          { icon: TrendingUp, label: "Monthly Growth", value: `${data.stats.monthlyGrowth}%` },
+        ])
+        
+        // Set categories
+        setCategories(data.categories)
+        
+        // Set featured services
+        setFeaturedServices(data.featuredServices)
+        
+        setLoading(false)
+      } catch (error) {
+        console.error('Error fetching landing page data:', error)
+        setLoading(false)
+      }
+    }
+    
+    fetchData()
+  }, [])
+  
+  // Format large numbers (e.g., 1500000 -> 1.5M)
+  const formatNumber = (num: number): string => {
+    if (num >= 1000000) {
+      return (num / 1000000).toFixed(1) + 'M+'
+    }
+    if (num >= 1000) {
+      return (num / 1000).toFixed(1) + 'K+'
+    }
+    return num.toString()
+  }
 
   return (
     <>
@@ -79,12 +124,7 @@ export default function HomePage() {
         <section className="py-16 px-4 bg-background">
           <div className="container-app">
             <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-              {[
-                { icon: Users, label: "Happy Users", value: "1.2M+" },
-                { icon: Star, label: "Verified Reviews", value: "5.8M+" },
-                { icon: Award, label: "Trusted Businesses", value: "50K+" },
-                { icon: TrendingUp, label: "Monthly Growth", value: "15%" },
-              ].map((stat, idx) => {
+              {stats.map((stat, idx) => {
                 const Icon = stat.icon
                 return (
                   <Card key={idx} className="p-6 text-center">
@@ -109,11 +149,19 @@ export default function HomePage() {
                 Explore services across various industries and find exactly what you need.
               </p>
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-              {categories.map((category) => (
-                <CategoryCard key={category.id} {...category} />
-              ))}
-            </div>
+            {loading ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                {[1, 2, 3, 4, 5, 6].map((i) => (
+                  <Card key={i} className="h-32 animate-pulse bg-muted" />
+                ))}
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                {categories.map((category) => (
+                  <CategoryCard key={category.id} {...category} />
+                ))}
+              </div>
+            )}
             <div className="text-center mt-8">
               <Button variant="outline" asChild>
                 <Link href="/categories">View All Categories</Link>
@@ -131,11 +179,19 @@ export default function HomePage() {
                 Discover top-rated services based on authentic user reviews.
               </p>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              {featuredServices.map((service) => (
-                <ServiceCard key={service.id} {...service} />
-              ))}
-            </div>
+            {loading ? (
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                {[1, 2, 3].map((i) => (
+                  <Card key={i} className="h-64 animate-pulse bg-muted" />
+                ))}
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                {featuredServices.map((service) => (
+                  <ServiceCard key={service.id} {...service} />
+                ))}
+              </div>
+            )}
             <div className="text-center mt-8">
               <Button asChild>
                 <Link href="/explore">Explore More Services</Link>

@@ -615,6 +615,30 @@ export type Database = {
           }
         ]
       }
+      landing_stats: {
+        Row: {
+          id: string
+          user_count: number
+          business_count: number
+          review_count: number
+          updated_at: string | null
+        }
+        Insert: {
+          id?: string
+          user_count?: number
+          business_count?: number
+          review_count?: number
+          updated_at?: string | null
+        }
+        Update: {
+          id?: string
+          user_count?: number
+          business_count?: number
+          review_count?: number
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
