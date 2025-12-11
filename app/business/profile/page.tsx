@@ -22,11 +22,11 @@ interface BusinessData {
   location: string | null
   website: string | null
   description: string | null
-  rating_count: number | null
   phone: string | null
   address: string | null
   google_map_embed: string | null
   business_hours: any | null
+  created_at: string | null  // ← Add this
 }
 
 interface Category {
@@ -58,7 +58,7 @@ interface FormData {
   phone: string
   address: string
   google_map_embed: string
-  businessHours: string // This will now hold JSON string
+  businessHours: string // JSON string
 }
 
 export default function BusinessProfile() {
@@ -72,6 +72,8 @@ export default function BusinessProfile() {
   const [saving, setSaving] = useState(false)
   const [success, setSuccess] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [averageRating, setAverageRating] = useState(0)
+  const [reviewCount, setReviewCount] = useState(0)
   const [formData, setFormData] = useState<FormData>({
     business_name: "",
     description: "",
@@ -82,7 +84,7 @@ export default function BusinessProfile() {
     phone: "",
     address: "",
     google_map_embed: "",
-    businessHours: "{}" // Initialize as empty JSON object string
+    businessHours: "{}"
   })
   const router = useRouter()
   const supabase = createClient()
@@ -90,7 +92,6 @@ export default function BusinessProfile() {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        // Get current user
         const { data: { user }, error: userError } = await supabase.auth.getUser()
         
         if (userError || !user) {
@@ -98,35 +99,26 @@ export default function BusinessProfile() {
           return
         }
 
-        // Check if user is banned by fetching profile
         const { data: profileData, error: profileError } = await supabase
           .from('profiles')
           .select('is_banned')
           .eq('id', user.id)
           .single()
 
-        if (profileError) {
-          console.error('Error fetching profile:', profileError)
-          router.push('/auth/login')
-          return
-        }
-
-        // If user is banned, redirect to public page
-        if (profileData.is_banned) {
-          // Sign out the user
+        if (profileError || profileData.is_banned) {
           await supabase.auth.signOut()
           router.push('/?message=banned')
           return
         }
 
-        // Fetch business data
+        // Fetch business data (no rating_count)
         const { data: businessData, error: businessError } = await supabase
           .from('businesses')
-          .select('id, business_name, location, website, description, rating_count, phone, address, google_map_embed, business_hours')
+          .select('id, business_name, location, website, description, phone, address, google_map_embed, business_hours, created_at')
           .eq('business_owner_id', user.id)
           .single()
 
-        if (businessError) {
+        if (businessError || !businessData) {
           console.error('Error fetching business:', businessError)
           router.push('/business/dashboard')
           return
@@ -146,45 +138,42 @@ export default function BusinessProfile() {
           businessHours: businessData.business_hours ? JSON.stringify(businessData.business_hours) : "{}"
         })
 
-        // Fetch all categories
-        const { data: categoriesData, error: categoriesError } = await supabase
-          .from('categories')
-          .select('id, name')
-          .order('name')
+        // Calculate real average rating and review count
+        const { data: reviewsData } = await supabase
+          .from('reviews')
+          .select('rating')
+          .eq('reviewee_id', businessData.id)
 
-        if (!categoriesError) {
-          setCategories(categoriesData || [])
+        if (reviewsData && reviewsData.length > 0) {
+          const total = reviewsData.reduce((sum, r) => sum + r.rating, 0)
+          setAverageRating(Math.round((total / reviewsData.length) * 10) / 10)
+          setReviewCount(reviewsData.length)
+        } else {
+          setAverageRating(0)
+          setReviewCount(0)
         }
 
-        // Fetch all subcategories
-        const { data: subcategoriesData, error: subcategoriesError } = await supabase
-          .from('subcategories')
-          .select('id, name, category_id')
-          .order('name')
+        // Fetch categories
+        const { data: categoriesData } = await supabase.from('categories').select('id, name').order('name')
+        setCategories(categoriesData || [])
 
-        if (!subcategoriesError) {
-          setSubcategories(subcategoriesData || [])
-        }
+        // Fetch subcategories
+        const { data: subcategoriesData } = await supabase.from('subcategories').select('id, name, category_id').order('name')
+        setSubcategories(subcategoriesData || [])
 
         // Fetch business categories
-        const { data: businessCategoriesData, error: businessCategoriesError } = await supabase
+        const { data: businessCategoriesData } = await supabase
           .from('business_categories')
           .select('category_id')
           .eq('business_id', businessData.id)
-
-        if (!businessCategoriesError) {
-          setBusinessCategories(businessCategoriesData || [])
-        }
+        setBusinessCategories(businessCategoriesData || [])
 
         // Fetch business subcategories
-        const { data: businessSubcategoriesData, error: businessSubcategoriesError } = await supabase
+        const { data: businessSubcategoriesData } = await supabase
           .from('business_subcategories')
           .select('subcategory_id')
           .eq('business_id', businessData.id)
-
-        if (!businessSubcategoriesError) {
-          setBusinessSubcategories(businessSubcategoriesData || [])
-        }
+        setBusinessSubcategories(businessSubcategoriesData || [])
 
         setLoading(false)
       } catch (error) {
@@ -198,71 +187,41 @@ export default function BusinessProfile() {
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target
-    setFormData(prev => ({
-      ...prev,
-      [name]: value
-    }))
+    setFormData(prev => ({ ...prev, [name]: value }))
   }
 
   const handleCategoryChange = (value: string) => {
-    setFormData(prev => ({
-      ...prev,
-      categoryId: value,
-      subcategoryId: "" // Reset subcategory when category changes
-    }))
+    setFormData(prev => ({ ...prev, categoryId: value, subcategoryId: "" }))
   }
 
   const handleSubcategoryChange = (value: string) => {
-    setFormData(prev => ({
-      ...prev,
-      subcategoryId: value
-    }))
+    setFormData(prev => ({ ...prev, subcategoryId: value }))
   }
 
   const handleAddCategory = async () => {
     if (!formData.categoryId || !business) return
 
     try {
-      // Add category to business
-      const { error, data } = await supabase
+      const { error } = await supabase
         .from('business_categories')
         .upsert({
           business_id: business.id,
           category_id: formData.categoryId
-        }, {
-          onConflict: 'business_id,category_id'
-        })
+        }, { onConflict: 'business_id,category_id' })
 
-      if (error) {
-        console.error('Error adding category:', error)
-        setError(`Failed to add category: ${error.message || 'Please try again.'}`)
-        return
-      }
+      if (error) throw error
 
-      // Update local state
-      const newCategory = {
-        category_id: formData.categoryId
-      }
-      
       setBusinessCategories(prev => {
-        // Check if category already exists
         if (!prev.some(bc => bc.category_id === formData.categoryId)) {
-          return [...prev, newCategory]
+          return [...prev, { category_id: formData.categoryId }]
         }
         return prev
       })
 
-      // Clear selection
-      setFormData(prev => ({
-        ...prev,
-        categoryId: "",
-        subcategoryId: ""
-      }))
-      
+      setFormData(prev => ({ ...prev, categoryId: "", subcategoryId: "" }))
       setSuccess('Category added successfully!')
     } catch (error: any) {
-      console.error('Error adding category:', error)
-      setError(`An unexpected error occurred: ${error.message || 'Please try again.'}`)
+      setError(`Failed to add category: ${error.message}`)
     }
   }
 
@@ -270,45 +229,26 @@ export default function BusinessProfile() {
     if (!formData.subcategoryId || !business) return
 
     try {
-      // Add subcategory to business
-      const { error, data } = await supabase
+      const { error } = await supabase
         .from('business_subcategories')
         .upsert({
           business_id: business.id,
           subcategory_id: formData.subcategoryId
-        }, {
-          onConflict: 'business_id,subcategory_id'
-        })
+        }, { onConflict: 'business_id,subcategory_id' })
 
-      if (error) {
-        console.error('Error adding subcategory:', error)
-        setError(`Failed to add subcategory: ${error.message || 'Please try again.'}`)
-        return
-      }
+      if (error) throw error
 
-      // Update local state
-      const newSubcategory = {
-        subcategory_id: formData.subcategoryId
-      }
-      
       setBusinessSubcategories(prev => {
-        // Check if subcategory already exists
         if (!prev.some(bs => bs.subcategory_id === formData.subcategoryId)) {
-          return [...prev, newSubcategory]
+          return [...prev, { subcategory_id: formData.subcategoryId }]
         }
         return prev
       })
 
-      // Clear selection
-      setFormData(prev => ({
-        ...prev,
-        subcategoryId: ""
-      }))
-      
+      setFormData(prev => ({ ...prev, subcategoryId: "" }))
       setSuccess('Subcategory added successfully!')
     } catch (error: any) {
-      console.error('Error adding subcategory:', error)
-      setError(`An unexpected error occurred: ${error.message || 'Please try again.'}`)
+      setError(`Failed to add subcategory: ${error.message}`)
     }
   }
 
@@ -316,27 +256,17 @@ export default function BusinessProfile() {
     if (!business) return
 
     try {
-      // Remove category from business
-      const { error, data } = await supabase
+      const { error } = await supabase
         .from('business_categories')
         .delete()
-        .match({
-          business_id: business.id,
-          category_id: categoryId
-        })
+        .match({ business_id: business.id, category_id: categoryId })
 
-      if (error) {
-        console.error('Error removing category:', error)
-        setError(`Failed to remove category: ${error.message || 'Please try again.'}`)
-        return
-      }
+      if (error) throw error
 
-      // Update local state
       setBusinessCategories(prev => prev.filter(bc => bc.category_id !== categoryId))
       setSuccess('Category removed successfully!')
     } catch (error: any) {
-      console.error('Error removing category:', error)
-      setError(`An unexpected error occurred: ${error.message || 'Please try again.'}`)
+      setError(`Failed to remove category: ${error.message}`)
     }
   }
 
@@ -344,35 +274,22 @@ export default function BusinessProfile() {
     if (!business) return
 
     try {
-      // Remove subcategory from business
-      const { error, data } = await supabase
+      const { error } = await supabase
         .from('business_subcategories')
         .delete()
-        .match({
-          business_id: business.id,
-          subcategory_id: subcategoryId
-        })
+        .match({ business_id: business.id, subcategory_id: subcategoryId })
 
-      if (error) {
-        console.error('Error removing subcategory:', error)
-        setError(`Failed to remove subcategory: ${error.message || 'Please try again.'}`)
-        return
-      }
+      if (error) throw error
 
-      // Update local state
       setBusinessSubcategories(prev => prev.filter(bs => bs.subcategory_id !== subcategoryId))
       setSuccess('Subcategory removed successfully!')
     } catch (error: any) {
-      console.error('Error removing subcategory:', error)
-      setError(`An unexpected error occurred: ${error.message || 'Please try again.'}`)
+      setError(`Failed to remove subcategory: ${error.message}`)
     }
   }
 
   const toggleCategoryExpansion = (categoryId: string) => {
-    setExpandedCategories(prev => ({
-      ...prev,
-      [categoryId]: !prev[categoryId]
-    }))
+    setExpandedCategories(prev => ({ ...prev, [categoryId]: !prev[categoryId] }))
   }
 
   const getSubcategoriesForCategory = (categoryId: string) => {
@@ -380,9 +297,9 @@ export default function BusinessProfile() {
   }
 
   const getSubcategoriesForBusiness = () => {
-    return businessSubcategories.map(bs => {
-      return subcategories.find(s => s.id === bs.subcategory_id)
-    }).filter(Boolean) as Subcategory[]
+    return businessSubcategories
+      .map(bs => subcategories.find(s => s.id === bs.subcategory_id))
+      .filter(Boolean) as Subcategory[]
   }
 
   const handleSaveChanges = async (e: React.FormEvent) => {
@@ -392,15 +309,9 @@ export default function BusinessProfile() {
     setSuccess(null)
 
     try {
-      // Get current user
-      const { data: { user }, error: userError } = await supabase.auth.getUser()
-      
-      if (userError || !user || !business) {
-        router.push('/auth/login')
-        return
-      }
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user || !business) return
 
-      // Update business data
       const { error: updateError } = await supabase
         .from('businesses')
         .update({
@@ -414,17 +325,11 @@ export default function BusinessProfile() {
           business_hours: formData.businessHours ? JSON.parse(formData.businessHours) : null
         })
         .eq('id', business.id)
-        .eq('business_owner_id', user.id)
 
-      if (updateError) {
-        console.error('Error updating business:', updateError)
-        setError('Failed to update business information. Please try again.')
-        return
-      }
+      if (updateError) throw updateError
 
-      // Update local state
-      setBusiness({
-        ...business,
+      setBusiness(prev => prev ? {
+        ...prev,
         business_name: formData.business_name,
         description: formData.description,
         location: formData.location,
@@ -433,12 +338,11 @@ export default function BusinessProfile() {
         address: formData.address,
         google_map_embed: formData.google_map_embed,
         business_hours: formData.businessHours ? JSON.parse(formData.businessHours) : null
-      })
+      } : null)
 
       setSuccess('Business information updated successfully!')
-    } catch (error) {
-      console.error('Error saving changes:', error)
-      setError('An unexpected error occurred. Please try again.')
+    } catch (error: any) {
+      setError(`Failed to save: ${error.message}`)
     } finally {
       setSaving(false)
     }
@@ -477,7 +381,7 @@ export default function BusinessProfile() {
                 <div className="space-y-4">
                   <div>
                     <p className="text-xs text-muted-foreground">Rating</p>
-                    <RatingStars rating={business?.rating_count ? business.rating_count / 5 * 5 : 0} totalReviews={business?.rating_count || 0} />
+                    <RatingStars rating={averageRating} totalReviews={reviewCount} />
                   </div>
                   <div>
                     <p className="text-xs text-muted-foreground">Status</p>
@@ -485,7 +389,12 @@ export default function BusinessProfile() {
                   </div>
                   <div>
                     <p className="text-xs text-muted-foreground">Member Since</p>
-                    <p className="text-sm font-medium mt-1">January 2023</p>
+                    <p className="text-sm font-medium mt-1">
+                      {business?.created_at 
+                        ? new Date(business.created_at).toLocaleDateString('en-US', { year: 'numeric', month: 'long' })
+                        : 'Date not available'
+                      }
+                    </p>
                   </div>
                 </div>
               </Card>

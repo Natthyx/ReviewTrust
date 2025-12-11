@@ -29,7 +29,6 @@ interface BusinessData {
   business_name: string
   location: string | null
   website: string | null
-  rating_count: number | null
   description: string | null
 }
 
@@ -62,7 +61,6 @@ export default function BusinessDashboard() {
   useEffect(() => {
     const fetchBusinessData = async () => {
       try {
-        // Get current user
         const { data: { user }, error: userError } = await supabase.auth.getUser()
         
         if (userError || !user) {
@@ -70,34 +68,30 @@ export default function BusinessDashboard() {
           return
         }
 
-        // Fetch business data
+        // Fetch business data (no rating_count)
         const { data: businessData, error: businessError } = await supabase
           .from('businesses')
-          .select('id, business_name, location, website, rating_count, description')
+          .select('id, business_name, location, website, description')
           .eq('business_owner_id', user.id)
           .single()
 
         if (businessError) {
           console.error('Error fetching business:', businessError)
-          // If no business found, check if we have business info in user metadata
-          const { data: userDetails, error: metaError } = await supabase.auth.getUser()
-          
-          if (!metaError && userDetails?.user?.user_metadata) {
-            const metadata = userDetails.user.user_metadata
-            if (metadata.role === 'business' && metadata.businessName) {
-              // Show setup form with prefilled data from metadata
-              setSetupData({
-                businessName: metadata.businessName || "",
-                location: metadata.location || "",
-                website: metadata.website || ""
-              })
-              setShowSetup(true)
-            }
+          // Show setup form if no business exists
+          const { data: userDetails } = await supabase.auth.getUser()
+          const metadata = userDetails?.user?.user_metadata
+          if (metadata?.role === 'business' && metadata.businessName) {
+            setSetupData({
+              businessName: metadata.businessName || "",
+              location: metadata.location || "",
+              website: metadata.website || ""
+            })
+            setShowSetup(true)
           }
         } else {
           setBusiness(businessData)
           
-          // Fetch recent reviews
+          // Fetch recent reviews + calculate real rating
           const { data: reviewsData, error: reviewsError } = await supabase
             .from('reviews')
             .select(`
@@ -111,8 +105,8 @@ export default function BusinessDashboard() {
             .order('created_at', { ascending: false })
             .limit(5)
           
-          if (!reviewsError) {
-            setReviews(reviewsData || [])
+          if (!reviewsError && reviewsData) {
+            setReviews(reviewsData)
           }
         }
 
@@ -125,40 +119,28 @@ export default function BusinessDashboard() {
 
     fetchBusinessData()
 
-    // Listen for auth state changes to redirect when logged out
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
       if (event === 'SIGNED_OUT') {
         router.push('/')
       }
     })
 
-    return () => {
-      subscription.unsubscribe()
-    }
+    return () => subscription.unsubscribe()
   }, [router])
 
   const handleSetupChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target
-    setSetupData(prev => ({
-      ...prev,
-      [name]: value
-    }))
+    setSetupData(prev => ({ ...prev, [name]: value }))
   }
 
   const handleCreateBusiness = async (e: React.FormEvent) => {
     e.preventDefault()
     
     try {
-      // Get current user
-      const { data: { user }, error: userError } = await supabase.auth.getUser()
-      
-      if (userError || !user) {
-        router.push('/auth/login')
-        return
-      }
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return
 
-      // Create business record
-      const { data: newBusiness, error: businessError } = await supabase
+      const { data: newBusiness, error } = await supabase
         .from('businesses')
         .insert({
           business_name: setupData.businessName,
@@ -166,17 +148,12 @@ export default function BusinessDashboard() {
           location: setupData.location || null,
           website: setupData.website || null,
           description: null,
-          is_banned: false,
-          rating_count: 0
+          is_banned: false
         })
         .select()
         .single()
 
-      if (businessError) {
-        console.error('Business creation error:', businessError)
-        // Show error to user
-        return
-      }
+      if (error) throw error
 
       setBusiness(newBusiness)
       setShowSetup(false)
@@ -185,14 +162,12 @@ export default function BusinessDashboard() {
     }
   }
 
-  // Calculate average rating from reviews
-  const calculateAverageRating = () => {
-    if (reviews.length === 0) return 0
-    const total = reviews.reduce((sum, review) => sum + review.rating, 0)
-    return total / reviews.length
-  }
+  // Calculate average rating from actual reviews
+  const averageRating = reviews.length > 0
+    ? Math.round((reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length) * 10) / 10
+    : 0
 
-  // Prepare data for charts
+  // Rating distribution for pie chart
   const ratingData = [
     { stars: 5, count: reviews.filter(r => r.rating === 5).length },
     { stars: 4, count: reviews.filter(r => r.rating === 4).length },
@@ -233,7 +208,6 @@ export default function BusinessDashboard() {
         <main className="flex min-h-[calc(100vh-4rem)]">
           <Sidebar role="business" />
           <div className="flex-1 ml-64 p-8">
-            {/* Header */}
             <div className="mb-8">
               <h1 className="text-3xl font-bold">Business Setup</h1>
               <p className="text-muted-foreground mt-2">
@@ -244,14 +218,11 @@ export default function BusinessDashboard() {
             <Card className="max-w-2xl p-6">
               <form onSubmit={handleCreateBusiness} className="space-y-6">
                 <div>
-                  <Label htmlFor="businessName" className="text-sm font-medium">
-                    Business Name *
-                  </Label>
+                  <Label htmlFor="businessName">Business Name *</Label>
                   <Input 
                     id="businessName" 
                     name="businessName"
                     placeholder="Acme Inc." 
-                    className="mt-2" 
                     value={setupData.businessName}
                     onChange={handleSetupChange}
                     required 
@@ -259,29 +230,23 @@ export default function BusinessDashboard() {
                 </div>
                 
                 <div>
-                  <Label htmlFor="location" className="text-sm font-medium">
-                    Location
-                  </Label>
+                  <Label htmlFor="location">Location</Label>
                   <Input 
                     id="location" 
                     name="location"
                     placeholder="New York, NY" 
-                    className="mt-2" 
                     value={setupData.location}
                     onChange={handleSetupChange}
                   />
                 </div>
                 
                 <div>
-                  <Label htmlFor="website" className="text-sm font-medium">
-                    Website
-                  </Label>
+                  <Label htmlFor="website">Website</Label>
                   <Input 
                     id="website" 
                     name="website"
                     type="url"
                     placeholder="https://example.com" 
-                    className="mt-2" 
                     value={setupData.website}
                     onChange={handleSetupChange}
                   />
@@ -301,7 +266,6 @@ export default function BusinessDashboard() {
     )
   }
 
-  // If we don't have a business and we're not showing setup, show a message
   if (!business) {
     return (
       <>
@@ -327,18 +291,17 @@ export default function BusinessDashboard() {
       <main className="flex min-h-[calc(100vh-4rem)]">
         <Sidebar role="business" />
         <div className="flex-1 ml-64 p-8">
-          {/* Header */}
           <div className="mb-8">
             <h1 className="text-3xl font-bold">Business Dashboard</h1>
             <p className="text-muted-foreground mt-2">
-              Welcome back, {business?.business_name || "Business Owner"}
+              Welcome back, {business.business_name}
             </p>
           </div>
 
           {/* Stats */}
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
             {[
-              { icon: Star, label: "Average Rating", value: calculateAverageRating().toFixed(1), color: "text-yellow-500" },
+              { icon: Star, label: "Average Rating", value: averageRating.toFixed(1), color: "text-yellow-500" },
               { icon: MessageSquare, label: "Total Reviews", value: reviews.length.toString(), color: "text-blue-500" },
               { icon: Users, label: "Profile Views", value: "4.5K", color: "text-purple-500" },
               { icon: TrendingUp, label: "Avg Response Time", value: "2h 30m", color: "text-green-500" },
@@ -362,7 +325,6 @@ export default function BusinessDashboard() {
 
           {/* Charts */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
-            {/* Rating Distribution */}
             <Card className="p-6 lg:col-span-1">
               <h3 className="font-semibold mb-4">Rating Distribution</h3>
               <ResponsiveContainer width="100%" height={250}>
@@ -385,7 +347,6 @@ export default function BusinessDashboard() {
               </ResponsiveContainer>
             </Card>
 
-            {/* Views & Clicks */}
             <Card className="p-6 lg:col-span-2">
               <h3 className="font-semibold mb-4">Profile Views & Clicks</h3>
               <ResponsiveContainer width="100%" height={250}>
@@ -416,6 +377,9 @@ export default function BusinessDashboard() {
                     <div key={review.id} className="border-b pb-4 last:border-0 last:pb-0">
                       <div className="flex items-start justify-between">
                         <div>
+                          <span className="text-sm font-medium">
+                              {review.reviewer?.name || "Anonymous"}
+                            </span>
                           <div className="flex items-center gap-2 mb-1">
                             {[...Array(5)].map((_, i) => (
                               <Star
@@ -427,13 +391,11 @@ export default function BusinessDashboard() {
                                 }`}
                               />
                             ))}
-                            <span className="text-sm font-medium ml-2">
-                              {review.reviewer?.name || "Anonymous"}
-                            </span>
-                          </div>
-                          <p className="text-sm text-muted-foreground">
+                            <p className="text-sm text-muted-foreground">
                             {review.comment || "No comment provided"}
                           </p>
+                          </div>
+                          
                         </div>
                         <span className="text-xs text-muted-foreground">
                           {review.created_at

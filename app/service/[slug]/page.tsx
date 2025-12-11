@@ -47,7 +47,6 @@ async function getBusinessData(slug: string): Promise<{business: Business | null
         address,
         google_map_embed,
         business_hours,
-        rating_count,
         created_at,
         updated_at,
         business_owner_id,

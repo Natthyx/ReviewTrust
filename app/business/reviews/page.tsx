@@ -30,15 +30,6 @@ interface Review {
   }> | null
 }
 
-interface ReviewComment {
-  id: string
-  comment: string
-  created_at: string | null
-  commenter: {
-    name: string | null
-  } | null
-}
-
 export default function BusinessReviews() {
   const [reviews, setReviews] = useState<Review[]>([])
   const [filteredReviews, setFilteredReviews] = useState<Review[]>([])

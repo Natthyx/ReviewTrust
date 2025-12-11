@@ -109,7 +109,6 @@ export type Database = {
           description: string | null
           website: string | null
           is_banned: boolean | null
-          rating_count: number | null
           created_at: string | null
           updated_at: string | null
           business_hours: Json | null
@@ -125,7 +124,6 @@ export type Database = {
           description?: string | null
           website?: string | null
           is_banned?: boolean | null
-          rating_count?: number | null
           created_at?: string | null
           updated_at?: string | null
           business_hours?: Json | null
@@ -141,7 +139,6 @@ export type Database = {
           description?: string | null
           website?: string | null
           is_banned?: boolean | null
-          rating_count?: number | null
           created_at?: string | null
           updated_at?: string | null
           business_hours?: Json | null
