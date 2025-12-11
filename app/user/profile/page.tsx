@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import Link from 'next/link'
+import { RatingStars } from '@/components/rating-stars'
 import { 
   User, 
   Mail, 
@@ -15,7 +16,8 @@ import {
   Star, 
   BookOpen, 
   Edit3,
-  TrendingUp
+  TrendingUp,
+  MessageSquare
 } from 'lucide-react'
 import { useBannedUserCheck } from '@/hooks/useBannedUserCheck'
 
@@ -32,20 +34,30 @@ interface AnalyticsData {
   reads_count: number
 }
 
+interface UserReview {
+  id: string
+  rating: number
+  comment: string | null
+  created_at: string | null  // ← Fixed: allow null
+  business: {
+    id: string
+    business_name: string
+  }
+}
+
 export default function UserProfilePage() {
   const [profile, setProfile] = useState<ProfileData | null>(null)
   const [analytics, setAnalytics] = useState<AnalyticsData>({ reviews_count: 0, reads_count: 0 })
+  const [userReviews, setUserReviews] = useState<UserReview[]>([])
   const [loading, setLoading] = useState(true)
   const router = useRouter()
   const supabase = createClient()
 
-  // Check if user is banned
   useBannedUserCheck('user')
 
   useEffect(() => {
     const fetchUserProfile = async () => {
       try {
-        // Get current user
         const { data: { user }, error: userError } = await supabase.auth.getUser()
         
         if (userError || !user) {
@@ -68,15 +80,13 @@ export default function UserProfilePage() {
 
         setProfile(profileData)
 
-        // Fetch analytics data
-        // Count reviews
-        const { count: reviewsCount, error: reviewsError } = await supabase
+        // Fetch analytics: review & read counts
+        const { count: reviewsCount } = await supabase
           .from('reviews')
           .select('*', { count: 'exact', head: true })
           .eq('reviewer_id', user.id)
 
-        // Count reads
-        const { count: readsCount, error: readsError } = await supabase
+        const { count: readsCount } = await supabase
           .from('user_reads')
           .select('*', { count: 'exact', head: true })
           .eq('user_id', user.id)
@@ -85,6 +95,36 @@ export default function UserProfilePage() {
           reviews_count: reviewsCount || 0,
           reads_count: readsCount || 0
         })
+
+        // Fetch user's actual reviews with business name
+        const { data: reviewsData, error: reviewsError } = await supabase
+          .from('reviews')
+          .select(`
+            id,
+            rating,
+            comment,
+            created_at,
+            businesses (
+              id,
+              business_name
+            )
+          `)
+          .eq('reviewer_id', user.id)
+          .order('created_at', { ascending: false })
+
+        if (!reviewsError && reviewsData) {
+          const formattedReviews = reviewsData.map(review => ({
+            id: review.id,
+            rating: review.rating,
+            comment: review.comment,
+            created_at: review.created_at,
+            business: {
+              id: review.businesses.id,
+              business_name: review.businesses.business_name
+            }
+          }))
+          setUserReviews(formattedReviews)
+        }
 
         setLoading(false)
       } catch (error) {
@@ -95,6 +135,15 @@ export default function UserProfilePage() {
 
     fetchUserProfile()
   }, [router])
+
+  const formatDate = (dateString: string | null) => {
+  if (!dateString) return 'Unknown date'
+  return new Date(dateString).toLocaleDateString('en-US', { 
+    year: 'numeric', 
+    month: 'long', 
+    day: 'numeric' 
+  })
+}
 
   if (loading) {
     return (
@@ -118,7 +167,7 @@ export default function UserProfilePage() {
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-8">
             <div>
               <h1 className="text-3xl font-bold">Your Profile</h1>
-              <p className="text-muted-foreground">Manage your account and activity</p>
+              <p className="text-muted-foreground">Manage your account and view your activity</p>
             </div>
             <Button asChild>
               <Link href="/categories">
@@ -157,7 +206,7 @@ export default function UserProfilePage() {
                     <div className="flex items-center text-sm">
                       <Calendar className="w-4 h-4 mr-2 text-muted-foreground" />
                       <span>
-                        Joined {profile?.created_at ? new Date(profile.created_at).toLocaleDateString() : 'Unknown'}
+                        Joined {profile?.created_at ? formatDate(profile.created_at) : 'Unknown'}
                       </span>
                     </div>
                   </div>
@@ -165,13 +214,14 @@ export default function UserProfilePage() {
               </Card>
             </div>
 
-            {/* Analytics Cards */}
+            {/* Analytics & Reviews */}
             <div className="lg:col-span-2 space-y-6">
+              {/* Stats */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <Card>
                   <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                     <CardTitle className="text-sm font-medium">Reviews Written</CardTitle>
-                    <Star className="w-4 h-4 text-muted-foreground" />
+                    <MessageSquare className="w-4 h-4 text-muted-foreground" />
                   </CardHeader>
                   <CardContent>
                     <div className="text-2xl font-bold">{analytics.reviews_count}</div>
@@ -191,25 +241,79 @@ export default function UserProfilePage() {
                 </Card>
               </div>
 
+              {/* Your Reviews List */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Star className="w-5 h-5" />
+                    Your Reviews
+                  </CardTitle>
+                  <CardDescription>
+                    {userReviews.length > 0 
+                      ? `You have written ${userReviews.length} review${userReviews.length > 1 ? 's' : ''}`
+                      : "You haven't written any reviews yet"}
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {userReviews.length > 0 ? (
+                    <div className="space-y-4">
+                      {userReviews.map((review) => (
+                        <div key={review.id} className="border-b last:border-0 pb-4 last:pb-0">
+                          <Link 
+                            href={`/service/${review.business.id}`} 
+                            className="block hover:bg-muted/50 -m-2 p-2 rounded-lg transition-colors"
+                          >
+                            <div className="flex items-start justify-between">
+                              <div>
+                                <h4 className="font-medium text-sm">
+                                  {review.business.business_name}
+                                </h4>
+                                <div className="flex items-center gap-2 mt-1">
+                                  <RatingStars rating={review.rating} size="sm" />
+                                  <span className="text-xs text-muted-foreground">
+                                    {formatDate(review.created_at)}
+                                  </span>
+                                </div>
+                                {review.comment && (
+                                  <p className="text-sm text-muted-foreground mt-2 line-clamp-2">
+                                    {review.comment}
+                                  </p>
+                                )}
+                              </div>
+                            </div>
+                          </Link>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-center py-8 text-muted-foreground">
+                      <MessageSquare className="w-12 h-12 mx-auto mb-3 text-muted-foreground/50" />
+                      <p>No reviews yet. Be the first to share your experience!</p>
+                      <Button asChild className="mt-4">
+                        <Link href="/explore">Explore Businesses</Link>
+                      </Button>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* Activity CTA */}
               <Card>
                 <CardHeader>
                   <CardTitle className="flex items-center">
                     <TrendingUp className="w-5 h-5 mr-2" />
-                    Activity Overview
+                    Keep Engaging
                   </CardTitle>
-                  <CardDescription>Your recent engagement</CardDescription>
+                  <CardDescription>Continue sharing your experiences</CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <div className="space-y-4">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="font-medium">Write a Review</p>
-                        <p className="text-sm text-muted-foreground">Share your experience with services</p>
-                      </div>
-                      <Button variant="outline" size="sm" asChild>
-                        <Link href="/categories">Start</Link>
-                      </Button>
-                    </div>
+                  <div className="flex gap-3">
+                    <Button asChild>
+                      <Link href="/explore">Explore Services</Link>
+                    </Button>
+                    <Button variant="outline" asChild>
+                      <Link href="/categories">Browse Categories</Link>
+                    </Button>
                   </div>
                 </CardContent>
               </Card>
