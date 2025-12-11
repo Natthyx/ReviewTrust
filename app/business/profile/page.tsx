@@ -48,6 +48,14 @@ interface BusinessSubcategory {
   subcategory_id: string
 }
 
+interface BusinessDocument {
+  id: string
+  document_name: string | null
+  document_url: string
+  uploaded_at: string | null
+  status: string | null
+}
+
 interface FormData {
   business_name: string
   description: string
@@ -67,6 +75,7 @@ export default function BusinessProfile() {
   const [subcategories, setSubcategories] = useState<Subcategory[]>([])
   const [businessCategories, setBusinessCategories] = useState<BusinessCategory[]>([])
   const [businessSubcategories, setBusinessSubcategories] = useState<BusinessSubcategory[]>([])
+  const [businessDocuments, setBusinessDocuments] = useState<BusinessDocument[]>([])
   const [expandedCategories, setExpandedCategories] = useState<Record<string, boolean>>({})
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -175,6 +184,13 @@ export default function BusinessProfile() {
           .eq('business_id', businessData.id)
         setBusinessSubcategories(businessSubcategoriesData || [])
 
+        // Fetch business documents to determine verification status
+        const { data: businessDocumentsData } = await supabase
+          .from('business_documents')
+          .select('id, document_name, document_url, uploaded_at, status')
+          .eq('business_id', businessData.id)
+        setBusinessDocuments(businessDocumentsData || [])
+
         setLoading(false)
       } catch (error) {
         console.error('Error:', error)
@@ -184,6 +200,31 @@ export default function BusinessProfile() {
 
     fetchData()
   }, [router])
+
+  // Determine business verification status based on documents
+  const getVerificationStatus = () => {
+    // If no documents, status is pending
+    if (businessDocuments.length === 0) {
+      return "Pending";
+    }
+
+    // Check if all documents are approved
+    const allApproved = businessDocuments.every(doc => doc.status === "approved");
+    
+    // If all documents are approved, status is verified
+    if (allApproved) {
+      return "Verified";
+    }
+    
+    // Otherwise, status is pending (some documents are pending or rejected)
+    return "Pending";
+  };
+
+  // Get status badge variant based on verification status
+  const getStatusVariant = () => {
+    const status = getVerificationStatus();
+    return status === "Verified" ? "default" : "secondary";
+  };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target
@@ -385,7 +426,9 @@ export default function BusinessProfile() {
                   </div>
                   <div>
                     <p className="text-xs text-muted-foreground">Status</p>
-                    <Badge className="mt-1">Verified</Badge>
+                    <Badge variant={getStatusVariant()} className="mt-1">
+                      {getVerificationStatus()}
+                    </Badge>
                   </div>
                   <div>
                     <p className="text-xs text-muted-foreground">Member Since</p>

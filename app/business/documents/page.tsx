@@ -9,6 +9,8 @@ import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
 import { FileText, Download, Trash2, CheckCircle, Clock, Upload } from "lucide-react"
 import { FileUploader } from "@/components/file-uploader"
 
@@ -24,6 +26,8 @@ export default function BusinessDocuments() {
   const [documents, setDocuments] = useState<Document[]>([])
   const [loading, setLoading] = useState(true)
   const [uploading, setUploading] = useState(false)
+  const [documentName, setDocumentName] = useState("")
+  const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const router = useRouter()
   const supabase = createClient()
 
@@ -95,8 +99,19 @@ export default function BusinessDocuments() {
     fetchDocuments()
   }, [router])
 
-  const handleFileUpload = async (files: File[]) => {
-    if (files.length === 0) return
+  const handleFileSelect = (files: File[]) => {
+    if (files.length > 0) {
+      setSelectedFile(files[0])
+    }
+  }
+
+  const handleUpload = async (e: React.FormEvent) => {
+    e.preventDefault()
+    
+    if (!selectedFile || !documentName.trim()) {
+      alert("Please provide both a document name and select a file.")
+      return
+    }
 
     setUploading(true)
 
@@ -121,24 +136,37 @@ export default function BusinessDocuments() {
         return
       }
 
-      // Upload each file
-      for (const file of files) {
-        // Upload file to Supabase Storage (in this case we'll simulate by storing the file info)
-        // In a real implementation, you would upload to Supabase Storage
-        
-        // For now, we'll just create a document record with pending status
-        const { error: insertError } = await supabase
-          .from('business_documents')
-          .insert({
-            business_id: business.id,
-            document_name: file.name,
-            document_url: `/documents/${file.name}`, // This would be the actual URL in a real implementation
-            status: 'pending'
-          })
+      // Upload file to Supabase Storage
+      const fileExt = selectedFile.name.split('.').pop()
+      const fileName = `${business.id}/${Date.now()}.${fileExt}`
+      
+      const { error: uploadError } = await supabase.storage
+        .from('business_documents')
+        .upload(fileName, selectedFile, {
+          cacheControl: '3600',
+          upsert: false
+        })
 
-        if (insertError) {
-          console.error('Error uploading document:', insertError)
-        }
+      if (uploadError) throw uploadError
+      
+      // Get public URL
+      const { data: { publicUrl } } = supabase.storage
+        .from('business_documents')
+        .getPublicUrl(fileName)
+      
+      // Insert document record with the actual URL
+      const { error: insertError } = await supabase
+        .from('business_documents')
+        .insert({
+          business_id: business.id,
+          document_name: documentName.trim(),
+          document_url: publicUrl,
+          status: 'pending'
+        })
+
+      if (insertError) {
+        console.error('Error uploading document:', insertError)
+        throw insertError
       }
 
       // Refresh documents list
@@ -151,8 +179,13 @@ export default function BusinessDocuments() {
       if (!documentsError) {
         setDocuments(documentsData || [])
       }
+      
+      // Reset form
+      setDocumentName("")
+      setSelectedFile(null)
     } catch (error) {
       console.error('Error uploading files:', error)
+      alert("Failed to upload document. Please try again.")
     } finally {
       setUploading(false)
     }
@@ -211,16 +244,37 @@ export default function BusinessDocuments() {
           {/* Upload Section */}
           <Card className="p-6 mb-8">
             <h3 className="font-semibold mb-4">Upload Document</h3>
-            <FileUploader 
-              acceptedFormats={["pdf", "jpg", "png", "doc", "docx"]} 
-              multiple={true} 
-              onFilesSelected={handleFileUpload}
-            />
-            {uploading && (
-              <div className="mt-4 text-center text-sm text-muted-foreground">
-                Uploading documents...
+            <form onSubmit={handleUpload} className="space-y-4">
+              <div>
+                <Label htmlFor="documentName">Document Name *</Label>
+                <Input
+                  id="documentName"
+                  value={documentName}
+                  onChange={(e) => setDocumentName(e.target.value)}
+                  placeholder="Enter document name"
+                  required
+                />
               </div>
-            )}
+              
+              <div>
+                <Label>File Upload *</Label>
+                <FileUploader 
+                  acceptedFormats={["pdf", "jpg", "png", "doc", "docx"]} 
+                  multiple={false} 
+                  onFilesSelected={handleFileSelect}
+                />
+                {selectedFile && (
+                  <p className="text-sm text-muted-foreground mt-2">
+                    Selected: {selectedFile.name}
+                  </p>
+                )}
+              </div>
+              
+              <Button type="submit" disabled={uploading || !selectedFile || !documentName.trim()}>
+                <Upload className="w-4 h-4 mr-2" />
+                {uploading ? "Uploading..." : "Upload Document"}
+              </Button>
+            </form>
           </Card>
 
           {/* Documents List */}
