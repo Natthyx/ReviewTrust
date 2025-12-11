@@ -1,14 +1,7 @@
-import { Navbar } from "@/components/navbar"
-import { Button } from "@/components/ui/button"
-import { Card } from "@/components/ui/card"
-import { ReviewCard } from "@/components/review-card"
-import { RatingStars } from "@/components/rating-stars"
-import { Badge } from "@/components/ui/badge"
-import { MapPin, Phone, Globe, Clock, ChevronDown } from "lucide-react"
-import Image from "next/image"
 import { createClient } from '@supabase/supabase-js'
 import { Database } from '@/lib/supabase/database.types'
 import { ServiceClientWrapper } from "@/components/service-client-wrapper"
+import { Review } from '@/types/review'
 
 // Create a public client for read-only operations
 const createPublicClient = () => {
@@ -26,8 +19,7 @@ type Business = {
   address: string | null
   phone: string | null
   website: string | null
-  latitude: number | null
-  longitude: number | null
+  google_map_embed: string | null
   businessHours: any | null
   description: string | null
   rating: number
@@ -38,22 +30,11 @@ type Business = {
   subcategories: { id: string; name: string }[]
 }
 
-type Review = {
-  id: string
-  rating: number
-  comment: string | null
-  reviewer_name: string | null
-  created_at: string | null
-  is_verified: boolean | null
-}
-
 // Fetch business data
 async function getBusinessData(slug: string): Promise<{business: Business | null, reviews: Review[]}> {
   try {
     const supabase = createPublicClient()
     
-    // For now, we'll treat the slug as the business ID
-    // In a real implementation, you might have a separate slug field
     const { data: business, error: businessError } = await supabase
       .from('businesses')
       .select(`
@@ -64,8 +45,7 @@ async function getBusinessData(slug: string): Promise<{business: Business | null
         website,
         phone,
         address,
-        latitude,
-        longitude,
+        google_map_embed,
         business_hours,
         rating_count,
         created_at,
@@ -129,7 +109,9 @@ async function getBusinessData(slug: string): Promise<{business: Business | null
           comment: review.comment,
           reviewer_name: review.profiles?.name || 'Anonymous User',
           created_at: review.created_at || null,
-          is_verified: review.is_verified || false
+          is_verified: review.is_verified || false,
+          likes: 0,  // Initial likes from server (will be updated client-side)
+          replies: []  // No replies from server fetch
         }))
       }
     }
@@ -142,8 +124,7 @@ async function getBusinessData(slug: string): Promise<{business: Business | null
       address: business.address,
       phone: business.phone,
       website: business.website,
-      latitude: business.latitude,
-      longitude: business.longitude,
+      google_map_embed: business.google_map_embed,
       businessHours: business.business_hours,
       description: business.description,
       rating: averageRating,
@@ -200,10 +181,18 @@ export default async function ServiceDetailPage({ params }: { params: Promise<{ 
         ? JSON.parse(business.businessHours) 
         : business.businessHours
       
-      return Object.entries(hours).map(([day, hours]) => ({
-        day,
-        hours: hours as string
-      }))
+      // Define the correct order of days
+      const dayOrder = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
+      
+      // Convert to array and sort by the correct day order
+      const sortedHours = Object.entries(hours)
+        .map(([day, hours]) => ({
+          day,
+          hours: hours as string
+        }))
+        .sort((a, b) => dayOrder.indexOf(a.day) - dayOrder.indexOf(b.day))
+      
+      return sortedHours
     } catch (e) {
       // Fallback to default hours if parsing fails
       return [

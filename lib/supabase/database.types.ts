@@ -113,8 +113,7 @@ export type Database = {
           created_at: string | null
           updated_at: string | null
           business_hours: Json | null
-          latitude: number | null
-          longitude: number | null
+          google_map_embed: string | null
           phone: string | null
           address: string | null
         }
@@ -130,8 +129,7 @@ export type Database = {
           created_at?: string | null
           updated_at?: string | null
           business_hours?: Json | null
-          latitude?: number | null
-          longitude?: number | null
+          google_map_embed?: string | null
           phone?: string | null
           address?: string | null
         }
@@ -147,8 +145,7 @@ export type Database = {
           created_at?: string | null
           updated_at?: string | null
           business_hours?: Json | null
-          latitude?: number | null
-          longitude?: number | null
+          google_map_embed?: string | null
           phone?: string | null
           address?: string | null
         }
@@ -267,6 +264,7 @@ export type Database = {
           is_verified: boolean | null
           created_at: string | null
           updated_at: string | null
+          likes_count: number | null
         }
         Insert: {
           id?: string
@@ -277,6 +275,7 @@ export type Database = {
           is_verified?: boolean | null
           created_at?: string | null
           updated_at?: string | null
+          likes_count?: number | null
         }
         Update: {
           id?: string
@@ -287,6 +286,7 @@ export type Database = {
           is_verified?: boolean | null
           created_at?: string | null
           updated_at?: string | null
+          likes_count?: number | null
         }
         Relationships: [
           {
@@ -313,6 +313,7 @@ export type Database = {
           comment: string
           created_at: string | null
           updated_at: string | null
+          likes_count: number | null  // ← ADD THIS LINE
         }
         Insert: {
           id?: string
@@ -321,6 +322,7 @@ export type Database = {
           comment: string
           created_at?: string | null
           updated_at?: string | null
+          likes_count?: number | null  // ← ADD THIS LINE
         }
         Update: {
           id?: string
@@ -329,6 +331,7 @@ export type Database = {
           comment?: string
           created_at?: string | null
           updated_at?: string | null
+          likes_count?: number | null  // ← ADD THIS LINE
         }
         Relationships: [
           {
@@ -459,6 +462,78 @@ export type Database = {
             columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
+      user_likes: {
+        Row: {
+          id: string
+          user_id: string
+          review_id: string
+          created_at: string | null
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          review_id: string
+          created_at?: string | null
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          review_id?: string
+          created_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_likes_review_id_fkey"
+            columns: ["review_id"]
+            isOneToOne: false
+            referencedRelation: "reviews"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "user_likes_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
+            user_comment_likes: {
+        Row: {
+          id: string
+          user_id: string
+          comment_id: string
+          created_at: string | null
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          comment_id: string
+          created_at?: string | null
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          comment_id?: string
+          created_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_comment_likes_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "user_comment_likes_comment_id_fkey"
+            columns: ["comment_id"]
+            isOneToOne: false
+            referencedRelation: "review_comments"
             referencedColumns: ["id"]
           }
         ]

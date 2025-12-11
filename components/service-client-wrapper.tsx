@@ -1,7 +1,8 @@
 "use client"
 
-import { useState } from "react"
-import { WriteReviewModal } from "@/components/write-review-modal"
+import { useState, useEffect } from "react"
+import { WriteReviewInline } from "@/components/write-review-inline"
+import { createClient } from '@/lib/supabase/client'
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { ReviewCard } from "@/components/review-card"
@@ -10,6 +11,8 @@ import { Badge } from "@/components/ui/badge"
 import { MapPin, Phone, Globe, Clock, ChevronDown } from "lucide-react"
 import Image from "next/image"
 import { Navbar } from "@/components/navbar"
+import { toast } from "sonner"
+import { Review } from "@/types/review"
 
 interface Business {
   id: string
@@ -18,8 +21,7 @@ interface Business {
   address: string | null
   phone: string | null
   website: string | null
-  latitude: number | null
-  longitude: number | null
+  google_map_embed: string | null
   businessHours: any | null
   description: string | null
   rating: number
@@ -30,15 +32,6 @@ interface Business {
   subcategories: { id: string; name: string }[]
 }
 
-interface Review {
-  id: string
-  rating: number
-  comment: string | null
-  reviewer_name: string | null
-  created_at: string | null
-  is_verified: boolean | null
-}
-
 interface ServiceClientWrapperProps {
   business: Business
   reviews: Review[]
@@ -46,26 +39,296 @@ interface ServiceClientWrapperProps {
 }
 
 export function ServiceClientWrapper({ business, reviews, businessHours }: ServiceClientWrapperProps) {
-  const [showReviewModal, setShowReviewModal] = useState(false)
-  const [localReviews, setLocalReviews] = useState(reviews)
+  const [localReviews, setLocalReviews] = useState<Review[]>(reviews)
+  const [hasUserReviewed, setHasUserReviewed] = useState(false)
+  const [userLikes, setUserLikes] = useState<Record<string, boolean>>({})
+  const [userCommentLikes, setUserCommentLikes] = useState<Record<string, boolean>>({})
 
-  // Format review date
+  // Load user data: review status + likes
+  useEffect(() => {
+    const loadUserData = async () => {
+      const supabase = createClient()
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return
+
+      // Has reviewed?
+      const { data: reviewData } = await supabase
+        .from('reviews')
+        .select('id')
+        .eq('reviewee_id', business.id)
+        .eq('reviewer_id', user.id)
+        .maybeSingle()
+      if (reviewData) setHasUserReviewed(true)
+
+      // Review likes
+      const { data: reviewLikes } = await supabase
+        .from('user_likes')
+        .select('review_id')
+        .eq('user_id', user.id)
+      if (reviewLikes) {
+        const map = reviewLikes.reduce((acc, l) => ({ ...acc, [l.review_id]: true }), {} as Record<string, boolean>)
+        setUserLikes(map)
+      }
+
+      // Comment likes
+      const { data: commentLikes } = await supabase
+        .from('user_comment_likes')
+        .select('comment_id')
+        .eq('user_id', user.id)
+      if (commentLikes) {
+        const map = commentLikes.reduce((acc, l) => ({ ...acc, [l.comment_id]: true }), {} as Record<string, boolean>)
+        setUserCommentLikes(map)
+      }
+    }
+    loadUserData()
+  }, [business.id])
+
+  // Fetch reviews real-time
+  useEffect(() => {
+    const fetchReviews = async () => {
+      const supabase = createClient()
+      const { data, error } = await supabase
+        .from('reviews')
+        .select(`
+          id,
+          rating,
+          comment,
+          created_at,
+          is_verified,
+          likes_count,
+          profiles(name),
+          review_comments(
+            id,
+            comment,
+            created_at,
+            likes_count,
+            profiles(name)
+          )
+        `)
+        .eq('reviewee_id', business.id)
+        .order('created_at', { ascending: false })
+
+      if (error) {
+        console.error('Error fetching reviews:', error)
+        return
+      }
+
+      const processed = data.map(review => ({
+        id: review.id,
+        rating: review.rating,
+        comment: review.comment,
+        reviewer_name: review.profiles?.name || 'Anonymous User',
+        created_at: review.created_at,
+        is_verified: review.is_verified || false,
+        likes: review.likes_count ?? 0,
+        replies: (review.review_comments || []).map((c: any) => ({
+          id: c.id,
+          author: c.profiles?.name || 'Business Owner',
+          content: c.comment,
+          date: c.created_at ? new Date(c.created_at).toLocaleDateString() : 'Unknown date',
+          likes: c.likes_count ?? 0,
+          isLiked: false
+        }))
+      }))
+
+      // Apply current user's like status to replies
+      const withReplyLikes = processed.map(review => ({
+        ...review,
+        replies: review.replies.map(reply => ({
+          ...reply,
+          isLiked: !!userCommentLikes[reply.id]
+        }))
+      }))
+
+      setLocalReviews(withReplyLikes)
+    }
+
+    fetchReviews()
+
+    const supabase = createClient()
+    const channel = supabase
+      .channel('reviews-changes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'reviews', filter: `reviewee_id=eq.${business.id}` }, fetchReviews)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'review_comments' }, fetchReviews)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'user_likes' }, fetchReviews)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'user_comment_likes' }, fetchReviews)
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [business.id, userCommentLikes])
+
+  // Handle review like/unlike
+  const handleLike = async (reviewId: string) => {
+    try {
+      const supabase = createClient()
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) {
+        toast.error("You must be logged in to like reviews")
+        return
+      }
+
+      const { data: existing } = await supabase
+        .from('user_likes')
+        .select('id')
+        .eq('user_id', user.id)
+        .eq('review_id', reviewId)
+        .maybeSingle()
+
+      if (existing) {
+        // Unlike
+        await supabase.from('user_likes').delete().eq('id', existing.id)
+
+        const currentReview = localReviews.find(r => r.id === reviewId)
+        const newCount = Math.max(0, (currentReview?.likes ?? 0) - 1)
+        await supabase
+          .from('reviews')
+          .update({ likes_count: newCount })
+          .eq('id', reviewId)
+
+        setUserLikes(prev => {
+          const u = { ...prev }
+          delete u[reviewId]
+          return u
+        })
+        setLocalReviews(prev => prev.map(r =>
+          r.id === reviewId ? { ...r, likes: newCount } : r
+        ))
+
+        toast.success("Review unliked!")
+      } else {
+        // Like
+        await supabase.from('user_likes').insert({
+          user_id: user.id,
+          review_id: reviewId
+        })
+
+        const currentReview = localReviews.find(r => r.id === reviewId)
+        const newCount = (currentReview?.likes ?? 0) + 1
+        await supabase
+          .from('reviews')
+          .update({ likes_count: newCount })
+          .eq('id', reviewId)
+
+        setUserLikes(prev => ({ ...prev, [reviewId]: true }))
+        setLocalReviews(prev => prev.map(r =>
+          r.id === reviewId ? { ...r, likes: newCount } : r
+        ))
+
+        toast.success("Review liked!")
+      }
+    } catch (error) {
+      console.error('Error handling review like:', error)
+      toast.error("Failed to update like")
+    }
+  }
+
+  // Handle reply (comment) like/unlike – FIXED VERSION
+  const handleCommentLike = async (commentId: string) => {
+    try {
+      const supabase = createClient()
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) {
+        toast.error("You must be logged in to like replies")
+        return
+      }
+
+      // Find current reply likes from local state
+      const currentReply = localReviews
+        .flatMap(review => review.replies || [])
+        .find(r => r.id === commentId)
+
+      const currentLikes = currentReply?.likes ?? 0
+
+      const { data: existing } = await supabase
+        .from('user_comment_likes')
+        .select('id')
+        .eq('user_id', user.id)
+        .eq('comment_id', commentId)
+        .maybeSingle()
+
+      if (existing) {
+        // Unlike
+        await supabase.from('user_comment_likes').delete().eq('id', existing.id)
+
+        const newCount = Math.max(0, currentLikes - 1)
+
+        const { error: updateError } = await supabase
+          .from('review_comments')
+          .update({ likes_count: newCount })
+          .eq('id', commentId)
+
+        if (updateError) {
+          console.error('Failed to update comment likes_count:', updateError)
+          toast.error("Failed to unlike reply")
+          return
+        }
+
+        setUserCommentLikes(prev => {
+          const u = { ...prev }
+          delete u[commentId]
+          return u
+        })
+
+        setLocalReviews(prev => prev.map(review => ({
+          ...review,
+          replies: (review.replies || []).map(r =>
+            r.id === commentId
+              ? { ...r, likes: newCount, isLiked: false }
+              : r
+          )
+        })))
+
+        toast.success("Reply unliked")
+      } else {
+        // Like
+        await supabase.from('user_comment_likes').insert({
+          user_id: user.id,
+          comment_id: commentId
+        })
+
+        const newCount = currentLikes + 1
+
+        const { error: updateError } = await supabase
+          .from('review_comments')
+          .update({ likes_count: newCount })
+          .eq('id', commentId)
+
+        if (updateError) {
+          console.error('Failed to update comment likes_count:', updateError)
+          toast.error("Failed to like reply")
+          return
+        }
+
+        setUserCommentLikes(prev => ({ ...prev, [commentId]: true }))
+
+        setLocalReviews(prev => prev.map(review => ({
+          ...review,
+          replies: (review.replies || []).map(r =>
+            r.id === commentId
+              ? { ...r, likes: newCount, isLiked: true }
+              : r
+          )
+        })))
+
+        toast.success("Reply liked!")
+      }
+    } catch (error) {
+      console.error('Error handling reply like:', error)
+      toast.error("Something went wrong")
+    }
+  }
+
   const formatReviewDate = (dateString: string | null) => {
     if (!dateString) return 'Unknown date'
     const date = new Date(dateString)
     const now = new Date()
     const diffInDays = Math.floor((now.getTime() - date.getTime()) / (1000 * 60 * 60 * 24))
-    
     if (diffInDays === 0) return 'Today'
     if (diffInDays === 1) return 'Yesterday'
     if (diffInDays < 7) return `${diffInDays} days ago`
-    return date.toLocaleDateString()
-  }
-
-  const handleReviewSubmitted = () => {
-    // In a real implementation, you would refetch the reviews
-    // For now, we'll just show a toast
-    console.log("Review submitted")
+    return date.toLocaleDateString('en-US', { timeZone: 'UTC' })
   }
 
   return (
@@ -113,9 +376,7 @@ export function ServiceClientWrapper({ business, reviews, businessHours }: Servi
                         ))}
                       </div>
                     </div>
-                    <Button size="lg" onClick={() => setShowReviewModal(true)}>Write a Review</Button>
                   </div>
-                  
                   <p className="text-muted-foreground mt-4">
                     {business.description || `${business.name} is dedicated to providing quality service to our customers.`}
                   </p>
@@ -134,7 +395,6 @@ export function ServiceClientWrapper({ business, reviews, businessHours }: Servi
                         </div>
                       </div>
                     )}
-                    
                     {business.phone && (
                       <div className="flex items-center gap-3">
                         <Phone className="w-5 h-5 text-muted-foreground" />
@@ -144,7 +404,6 @@ export function ServiceClientWrapper({ business, reviews, businessHours }: Servi
                         </div>
                       </div>
                     )}
-                    
                     {business.website && (
                       <div className="flex items-center gap-3">
                         <Globe className="w-5 h-5 text-muted-foreground" />
@@ -154,7 +413,6 @@ export function ServiceClientWrapper({ business, reviews, businessHours }: Servi
                         </div>
                       </div>
                     )}
-                    
                     <div className="flex items-center gap-3">
                       <Clock className="w-5 h-5 text-muted-foreground" />
                       <div>
@@ -176,17 +434,34 @@ export function ServiceClientWrapper({ business, reviews, businessHours }: Servi
                     </Button>
                   </div>
 
+                  <WriteReviewInline 
+                    businessName={business.name}
+                    businessId={business.id}
+                    hasUserReviewed={hasUserReviewed}
+                    onReviewSubmitted={(newReview) => {
+                      setLocalReviews(prev => [newReview, ...prev])
+                      setHasUserReviewed(true)
+                    }}
+                  />
+
                   <div className="space-y-6">
                     {localReviews.map((review) => (
                       <ReviewCard
                         key={review.id}
                         author={review.reviewer_name || 'Anonymous User'}
                         rating={review.rating}
-                        title="" // Reviews don't have titles in our schema
+                        title={review.comment ? review.comment.substring(0, 60) + (review.comment.length > 60 ? '...' : '') : 'No comment'}
                         content={review.comment || ''}
                         date={formatReviewDate(review.created_at)}
                         verified={!!review.is_verified}
-                        likes={0} // We don't have likes in our schema
+                        likes={review.likes}
+                        replies={(review.replies || []).map(reply => ({
+                          ...reply,
+                          onLike: () => handleCommentLike(reply.id)
+                        }))}
+                        reviewId={review.id}
+                        isLiked={userLikes[review.id] || false}
+                        onLike={() => handleLike(review.id)}
                       />
                     ))}
                   </div>
@@ -202,8 +477,8 @@ export function ServiceClientWrapper({ business, reviews, businessHours }: Servi
                 <Card className="p-6">
                   <h3 className="font-semibold mb-4">Business Hours</h3>
                   <ul className="space-y-2 text-sm">
-                    {businessHours.map((hour, index) => (
-                      <li key={index} className="flex justify-between">
+                    {businessHours.map((hour) => (
+                      <li key={hour.day} className="flex justify-between">
                         <span>{hour.day}</span>
                         <span>{hour.hours}</span>
                       </li>
@@ -214,12 +489,16 @@ export function ServiceClientWrapper({ business, reviews, businessHours }: Servi
                 <Card className="p-6">
                   <h3 className="font-semibold mb-4">Location</h3>
                   <div className="aspect-video bg-muted rounded-lg relative overflow-hidden">
-                    <Image 
-                      src="/map-placeholder.png" 
-                      alt="Location map" 
-                      fill 
-                      className="object-cover"
-                    />
+                    {business.google_map_embed ? (
+                      <div 
+                        dangerouslySetInnerHTML={{ __html: business.google_map_embed }} 
+                        className="w-full h-full"
+                      />
+                    ) : (
+                      <div className="flex items-center justify-center h-full text-muted-foreground">
+                        <p>No map available</p>
+                      </div>
+                    )}
                   </div>
                 </Card>
               </div>
@@ -227,14 +506,6 @@ export function ServiceClientWrapper({ business, reviews, businessHours }: Servi
           </div>
         </section>
       </main>
-      
-      <WriteReviewModal 
-        open={showReviewModal} 
-        onOpenChange={setShowReviewModal}
-        businessName={business.name}
-        businessId={business.id}
-        onReviewSubmitted={handleReviewSubmitted}
-      />
     </>
   )
 }

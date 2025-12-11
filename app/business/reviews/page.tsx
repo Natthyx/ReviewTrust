@@ -9,6 +9,7 @@ import { ReviewCard } from "@/components/review-card"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
+import { toast } from "sonner"
 
 interface Review {
   id: string
@@ -18,6 +19,15 @@ interface Review {
   reviewer: {
     name: string | null
   } | null
+  likes_count?: number | null
+  review_comments?: Array<{
+    id: string
+    comment: string
+    created_at: string | null
+    commenter: {
+      name: string | null
+    } | null
+  }> | null
 }
 
 interface ReviewComment {
@@ -35,6 +45,7 @@ export default function BusinessReviews() {
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState("all")
   const [sort, setSort] = useState("newest")
+  const [userLikes, setUserLikes] = useState<Record<string, boolean>>({})
   const router = useRouter()
   const supabase = createClient()
 
@@ -83,7 +94,7 @@ export default function BusinessReviews() {
           return
         }
 
-        // Fetch reviews for this business with reviewer info
+        // Fetch reviews for this business with reviewer info and replies
         const { data: reviewsData, error: reviewsError } = await supabase
           .from('reviews')
           .select(`
@@ -91,7 +102,14 @@ export default function BusinessReviews() {
             rating,
             comment,
             created_at,
-            reviewer:profiles(name)
+            likes_count,
+            reviewer:profiles(name),
+            review_comments(
+              id,
+              comment,
+              created_at,
+              commenter:profiles(name)
+            )
           `)
           .eq('reviewee_id', business.id)
           .order('created_at', { ascending: false })
@@ -99,8 +117,14 @@ export default function BusinessReviews() {
         if (reviewsError) {
           console.error('Error fetching reviews:', reviewsError)
         } else {
-          setReviews(reviewsData || [])
-          setFilteredReviews(reviewsData || [])
+          // Process reviews with replies
+          const processedReviews = reviewsData?.map(review => ({
+            ...review,
+            replies: review.review_comments || []
+          })) || []
+          
+          setReviews(processedReviews)
+          setFilteredReviews(processedReviews)
         }
 
         setLoading(false)
@@ -112,6 +136,127 @@ export default function BusinessReviews() {
 
     fetchReviews()
   }, [router])
+
+  // Check user likes status
+  useEffect(() => {
+    const checkUserLikes = async () => {
+      try {
+        const { data: { user } } = await supabase.auth.getUser()
+        
+        if (user) {
+          // Get all reviews this user has liked
+          const { data: userLikesData, error } = await supabase
+            .from('user_likes')
+            .select('review_id')
+            .eq('user_id', user.id)
+          
+          if (!error && userLikesData) {
+            const likesMap: Record<string, boolean> = {}
+            userLikesData.forEach(like => {
+              likesMap[like.review_id] = true
+            })
+            setUserLikes(likesMap)
+          }
+        }
+      } catch (error) {
+        console.error('Error checking user likes:', error)
+      }
+    }
+    
+    checkUserLikes()
+  }, [])
+
+  // Handle like/unlike functionality
+  const handleLike = async (reviewId: string) => {
+    try {
+      // Get current user
+      const { data: { user } } = await supabase.auth.getUser()
+      
+      if (!user) {
+        toast.error("You must be logged in to like reviews")
+        return
+      }
+      
+      // Check if user has already liked this review
+      const { data: existingLike, error: checkError } = await supabase
+        .from('user_likes')
+        .select('id')
+        .eq('user_id', user.id)
+        .eq('review_id', reviewId)
+        .maybeSingle()
+      
+      if (checkError) {
+        console.error('Error checking like status:', checkError)
+        toast.error("Failed to like review")
+        return
+      }
+      
+      if (existingLike) {
+        // Unlike - remove the like
+        const { error: deleteError } = await supabase
+          .from('user_likes')
+          .delete()
+          .eq('id', existingLike.id)
+        
+        if (deleteError) {
+          console.error('Error unliking review:', deleteError)
+          toast.error("Failed to unlike review")
+          return
+        }
+        
+        // Decrement review likes count
+        const { error: updateError } = await supabase
+          .from('reviews')
+          .update({ likes_count: Math.max(0, (reviews.find(r => r.id === reviewId)?.likes_count || 0) - 1) })
+          .eq('id', reviewId)
+        
+        if (updateError) {
+          console.error('Error updating likes count:', updateError)
+        }
+        
+        // Update local state
+        setUserLikes(prev => {
+          const newLikes = { ...prev }
+          delete newLikes[reviewId]
+          return newLikes
+        })
+        
+        toast.success("Review unliked!")
+      } else {
+        // Like - add the like
+        const { error: insertError } = await supabase
+          .from('user_likes')
+          .insert({
+            user_id: user.id,
+            review_id: reviewId
+          })
+        
+        if (insertError) {
+          console.error('Error liking review:', insertError)
+          toast.error("Failed to like review")
+          return
+        }
+        
+        // Increment review likes count
+        const { error: updateError } = await supabase
+          .from('reviews')
+          .update({ likes_count: (reviews.find(r => r.id === reviewId)?.likes_count || 0) + 1 })
+          .eq('id', reviewId)
+        
+        if (updateError) {
+          console.error('Error updating likes count:', updateError)
+        }
+        
+        // Update local state
+        setUserLikes(prev => ({ ...prev, [reviewId]: true }))
+        
+        toast.success("Review liked!")
+      }
+    } catch (error) {
+      console.error('Error handling like:', error)
+      toast.error("Failed to like review")
+    }
+  }
 
   useEffect(() => {
     let result = [...reviews]
@@ -212,9 +357,17 @@ export default function BusinessReviews() {
                   content={review.comment || "No comment provided"}
                   date={review.created_at ? new Date(review.created_at).toLocaleDateString() : "Unknown date"}
                   verified
-                  likes={0}
+                  likes={review.likes_count || 0}
+                  replies={(review.review_comments || []).map((comment: any) => ({
+                    author: comment.commenter?.name || "Business Owner",
+                    content: comment.comment,
+                    date: comment.created_at ? new Date(comment.created_at).toLocaleDateString() : "Unknown date"
+                  }))}
                   showReplyButton
                   onReply={() => handleReply(review.id)}
+                  reviewId={review.id}
+                  isLiked={userLikes[review.id] || false}
+                  onLike={() => handleLike(review.id)}
                 />
               ))}
             </div>

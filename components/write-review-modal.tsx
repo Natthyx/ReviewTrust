@@ -26,7 +26,6 @@ export function WriteReviewModal({
   onReviewSubmitted
 }: WriteReviewModalProps) {
   const [rating, setRating] = useState(0)
-  const [title, setTitle] = useState("")
   const [content, setContent] = useState("")
   const [step, setStep] = useState(1)
   const [submitting, setSubmitting] = useState(false)
@@ -64,7 +63,14 @@ export function WriteReviewModal({
       
       if (error) {
         console.error('Error submitting review:', error)
-        toast.error("Failed to submit review. Please try again.")
+        // Check if it's a duplicate review error
+        if (error.code === '23505' || 
+            (error.message && error.message.includes('duplicate key value')) ||
+            (error.message && error.message.includes('reviews_reviewer_id_reviewee_id_key'))) {
+          toast.error("You have already submitted a review for this business. Only one review per business is allowed.")
+        } else {
+          toast.error("Failed to submit review. Please try again.")
+        }
       } else {
         toast.success("Review submitted successfully!")
         onReviewSubmitted?.()
@@ -72,7 +78,6 @@ export function WriteReviewModal({
         
         // Reset form
         setRating(0)
-        setTitle("")
         setContent("")
         setStep(1)
       }
@@ -116,19 +121,6 @@ export function WriteReviewModal({
           {step === 2 && (
             <>
               <div>
-                <Label htmlFor="title" className="text-sm font-medium">
-                  Review Title
-                </Label>
-                <Input
-                  id="title"
-                  placeholder="Summarize your experience"
-                  value={title}
-                  onChange={(e) => setTitle(e.target.value)}
-                  className="mt-2"
-                />
-              </div>
-
-              <div>
                 <Label htmlFor="content" className="text-sm font-medium">
                   Your Review
                 </Label>
@@ -148,7 +140,7 @@ export function WriteReviewModal({
                 </Button>
                 <Button 
                   className="flex-1" 
-                  disabled={!title || !content || submitting} 
+                  disabled={!content || submitting} 
                   onClick={handleSubmit}
                 >
                   {submitting ? "Submitting..." : "Submit Review"}

@@ -25,8 +25,7 @@ interface BusinessData {
   rating_count: number | null
   phone: string | null
   address: string | null
-  latitude: number | null
-  longitude: number | null
+  google_map_embed: string | null
   business_hours: any | null
 }
 
@@ -58,8 +57,7 @@ interface FormData {
   subcategoryId: string
   phone: string
   address: string
-  latitude: string
-  longitude: string
+  google_map_embed: string
   businessHours: string // This will now hold JSON string
 }
 
@@ -83,8 +81,7 @@ export default function BusinessProfile() {
     subcategoryId: "",
     phone: "",
     address: "",
-    latitude: "",
-    longitude: "",
+    google_map_embed: "",
     businessHours: "{}" // Initialize as empty JSON object string
   })
   const router = useRouter()
@@ -125,7 +122,7 @@ export default function BusinessProfile() {
         // Fetch business data
         const { data: businessData, error: businessError } = await supabase
           .from('businesses')
-          .select('id, business_name, location, website, description, rating_count, phone, address, latitude, longitude, business_hours')
+          .select('id, business_name, location, website, description, rating_count, phone, address, google_map_embed, business_hours')
           .eq('business_owner_id', user.id)
           .single()
 
@@ -145,10 +142,8 @@ export default function BusinessProfile() {
           subcategoryId: "",
           phone: businessData.phone || "",
           address: businessData.address || "",
-          latitude: businessData.latitude ? businessData.latitude.toString() : "",
-          longitude: businessData.longitude ? businessData.longitude.toString() : "",
+          google_map_embed: businessData.google_map_embed || "",
           businessHours: businessData.business_hours ? JSON.stringify(businessData.business_hours) : "{}"
-
         })
 
         // Fetch all categories
@@ -415,8 +410,7 @@ export default function BusinessProfile() {
           website: formData.website,
           phone: formData.phone,
           address: formData.address,
-          latitude: formData.latitude ? parseFloat(formData.latitude) : null,
-          longitude: formData.longitude ? parseFloat(formData.longitude) : null,
+          google_map_embed: formData.google_map_embed,
           business_hours: formData.businessHours ? JSON.parse(formData.businessHours) : null
         })
         .eq('id', business.id)
@@ -437,8 +431,7 @@ export default function BusinessProfile() {
         website: formData.website,
         phone: formData.phone,
         address: formData.address,
-        latitude: formData.latitude ? parseFloat(formData.latitude) : null,
-        longitude: formData.longitude ? parseFloat(formData.longitude) : null,
+        google_map_embed: formData.google_map_embed,
         business_hours: formData.businessHours ? JSON.parse(formData.businessHours) : null
       })
 
@@ -726,38 +719,22 @@ export default function BusinessProfile() {
                     />
                   </div>
 
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <Label htmlFor="latitude" className="text-sm font-medium">
-                        Latitude
-                      </Label>
-                      <Input 
-                        id="latitude" 
-                        name="latitude"
-                        value={formData.latitude}
-                        onChange={handleInputChange}
-                        className="mt-2" 
-                        placeholder="40.7128"
-                        type="number"
-                        step="any"
-                      />
-                    </div>
-                    
-                    <div>
-                      <Label htmlFor="longitude" className="text-sm font-medium">
-                        Longitude
-                      </Label>
-                      <Input 
-                        id="longitude" 
-                        name="longitude"
-                        value={formData.longitude}
-                        onChange={handleInputChange}
-                        className="mt-2" 
-                        placeholder="-74.0060"
-                        type="number"
-                        step="any"
-                      />
-                    </div>
+                  <div>
+                    <Label htmlFor="google_map_embed" className="text-sm font-medium">
+                      Google Maps Embed Code
+                    </Label>
+                    <Textarea 
+                      id="google_map_embed" 
+                      name="google_map_embed"
+                      value={formData.google_map_embed}
+                      onChange={handleInputChange}
+                      className="mt-2 font-mono text-xs" 
+                      placeholder='Paste your Google Maps embed code here, e.g.: <iframe src="https://www.google.com/maps/embed?pb=..."></iframe>'
+                      rows={4}
+                    />
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Copy and paste the embed code from Google Maps. This will be displayed on your business page.
+                    </p>
                   </div>
 
                   <div>

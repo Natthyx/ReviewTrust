@@ -10,7 +10,8 @@ import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
 import { RatingStars } from "@/components/rating-stars"
-import { ArrowLeft } from "lucide-react"
+import { ArrowLeft, ThumbsUp } from "lucide-react"
+import { toast } from "sonner"
 
 interface Review {
   id: string
@@ -20,6 +21,7 @@ interface Review {
   reviewer: {
     name: string | null
   } | null
+  likes_count?: number | null
 }
 
 interface ReviewComment {
@@ -37,6 +39,7 @@ export default function ReviewReplyPage() {
   const [replyText, setReplyText] = useState("")
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [isLiked, setIsLiked] = useState(false)
   const router = useRouter()
   const params = useParams()
   const supabase = createClient()
@@ -94,6 +97,7 @@ export default function ReviewReplyPage() {
             rating,
             comment,
             created_at,
+            likes_count,
             reviewer:profiles(name)
           `)
           .eq('id', params.id as string)
@@ -107,6 +111,18 @@ export default function ReviewReplyPage() {
         }
 
         setReview(reviewData)
+
+        // Check if user has liked this review
+        const { data: likeData, error: likeError } = await supabase
+          .from('user_likes')
+          .select('id')
+          .eq('user_id', user.id)
+          .eq('review_id', reviewData.id)
+          .maybeSingle()
+
+        if (!likeError && likeData) {
+          setIsLiked(true)
+        }
 
         // Fetch existing comments for this review
         const { data: commentsData, error: commentsError } = await supabase
@@ -231,7 +247,97 @@ export default function ReviewReplyPage() {
                     <p className="text-xs text-muted-foreground mb-3">
                       {review?.created_at ? new Date(review.created_at).toLocaleDateString() : "Unknown date"}
                     </p>
-                    <RatingStars rating={review?.rating || 0} />
+                    <div className="flex items-center gap-4">
+                      <RatingStars rating={review?.rating || 0} />
+                      <Button 
+                        variant="ghost" 
+                        size="sm" 
+                        className={`gap-2 h-8 ${isLiked ? 'text-green-600 hover:text-green-700 hover:bg-green-50' : ''}`}
+                        onClick={async () => {
+                          if (!review?.id) return
+                        
+                          try {
+                            const { data: { user } } = await supabase.auth.getUser()
+                            
+                            if (!user) {
+                              toast.error("You must be logged in to like reviews")
+                              return
+                            }
+                            
+                            if (isLiked) {
+                              // Unlike
+                              const { data: existingLike, error: checkError } = await supabase
+                                .from('user_likes')
+                                .select('id')
+                                .eq('user_id', user.id)
+                                .eq('review_id', review.id)
+                                .maybeSingle()
+                              
+                              if (!checkError && existingLike) {
+                                const { error: deleteError } = await supabase
+                                  .from('user_likes')
+                                  .delete()
+                                  .eq('id', existingLike.id)
+                                
+                                if (deleteError) {
+                                  console.error('Error unliking review:', deleteError)
+                                  toast.error("Failed to unlike review")
+                                  return
+                                }
+                                
+                                // Decrement review likes count
+                                const { error: updateError } = await supabase
+                                  .from('reviews')
+                                  .update({ likes_count: Math.max(0, (review.likes_count || 0) - 1) })
+                                  .eq('id', review.id)
+                                
+                                if (updateError) {
+                                  console.error('Error updating likes count:', updateError)
+                                }
+                                
+                                setIsLiked(false)
+                                setReview(prev => prev ? {...prev, likes_count: Math.max(0, (prev.likes_count || 0) - 1)} : null)
+                                toast.success("Review unliked!")
+                              }
+                            } else {
+                              // Like
+                              const { error: insertError } = await supabase
+                                .from('user_likes')
+                                .insert({
+                                  user_id: user.id,
+                                  review_id: review.id
+                                })
+                              
+                              if (insertError) {
+                                console.error('Error liking review:', insertError)
+                                toast.error("Failed to like review")
+                                return
+                              }
+                              
+                              // Increment review likes count
+                              const { error: updateError } = await supabase
+                                .from('reviews')
+                                .update({ likes_count: (review.likes_count || 0) + 1 })
+                                .eq('id', review.id)
+                              
+                              if (updateError) {
+                                console.error('Error updating likes count:', updateError)
+                              }
+                              
+                              setIsLiked(true)
+                              setReview(prev => prev ? {...prev, likes_count: (prev.likes_count || 0) + 1} : null)
+                              toast.success("Review liked!")
+                            }
+                          } catch (error) {
+                            console.error('Error liking review:', error)
+                            toast.error("Failed to like review")
+                          }
+                        }}
+                      >
+                        <ThumbsUp className={`w-3.5 h-3.5 ${isLiked ? 'fill-current' : ''}`} />
+                        <span className="text-xs">{review?.likes_count || 0}</span>
+                      </Button>
+                    </div>
                     <p className="text-sm text-muted-foreground mt-3">
                       {review?.comment || "No comment provided"}
                     </p>
