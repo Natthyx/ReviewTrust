@@ -21,20 +21,61 @@ interface Service {
   description?: string
 }
 
+interface Category {
+  id: string
+  name: string
+}
+
+interface Pagination {
+  currentPage: number
+  totalPages: number
+  totalCount: number
+  hasNext: boolean
+  hasPrev: boolean
+}
+
 export default function ExplorePage() {
   const [searchQuery, setSearchQuery] = useState("")
   const [selectedCategory, setSelectedCategory] = useState("all")
   const [sortBy, setSortBy] = useState("rating")
   const [services, setServices] = useState<Service[]>([])
+  const [categories, setCategories] = useState<Category[]>([])
+  const [pagination, setPagination] = useState<Pagination>({
+    currentPage: 1,
+    totalPages: 1,
+    totalCount: 0,
+    hasNext: false,
+    hasPrev: false
+  })
   const [loading, setLoading] = useState(true)
+  const [currentPage, setCurrentPage] = useState(1)
   const searchParams = useSearchParams()
   
   // Get subcategory from URL params
   const subcategoryParam = searchParams.get('subcategory')
 
   useEffect(() => {
+    fetchCategories()
+  }, [])
+
+  useEffect(() => {
     fetchBusinesses()
-  }, [searchQuery, sortBy, subcategoryParam])
+  }, [searchQuery, selectedCategory, sortBy, subcategoryParam, currentPage])
+
+  const fetchCategories = async () => {
+    try {
+      const response = await fetch('/api/categories')
+      const data = await response.json()
+      
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to fetch categories')
+      }
+      
+      setCategories(data)
+    } catch (error) {
+      console.error('Error fetching categories:', error)
+    }
+  }
 
   const fetchBusinesses = async () => {
     try {
@@ -43,8 +84,11 @@ export default function ExplorePage() {
       // Build query parameters
       const params = new URLSearchParams()
       if (searchQuery) params.append('search', searchQuery)
+      if (selectedCategory && selectedCategory !== 'all') params.append('category', selectedCategory)
       if (subcategoryParam) params.append('subcategory', subcategoryParam)
       if (sortBy) params.append('sort', sortBy)
+      params.append('page', currentPage.toString())
+      params.append('limit', '12')
       
       const response = await fetch(`/api/explore?${params.toString()}`)
       const data = await response.json()
@@ -54,11 +98,11 @@ export default function ExplorePage() {
       }
       
       // Transform data to match ServiceCard expectations
-      const transformedServices = data.map((business: any) => ({
+      const transformedServices = data.businesses.map((business: any) => ({
         id: business.id,
         name: business.name,
         imageUrl: business.imageUrl || "/placeholder-service-image.svg", // Use real image URL
-        category: "Service", // Default category
+        category: business.category || "Service", // Use real category
         rating: business.rating || 0,
         reviewCount: business.reviewCount || 0,
         location: business.location || "",
@@ -66,11 +110,18 @@ export default function ExplorePage() {
       }))
       
       setServices(transformedServices)
+      setPagination(data.pagination)
       setLoading(false)
     } catch (error) {
       console.error('Error fetching businesses:', error)
       setLoading(false)
     }
+  }
+
+  const handlePageChange = (page: number) => {
+    setCurrentPage(page)
+    // Scroll to top when changing pages
+    window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
   return (
@@ -101,10 +152,11 @@ export default function ExplorePage() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Categories</SelectItem>
-                <SelectItem value="healthcare">Healthcare</SelectItem>
-                <SelectItem value="restaurant">Restaurant</SelectItem>
-                <SelectItem value="tech">Technology</SelectItem>
-                <SelectItem value="beauty">Beauty</SelectItem>
+                {categories.map((category) => (
+                  <SelectItem key={category.id} value={category.id}>
+                    {category.name}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
             <Select value={sortBy} onValueChange={setSortBy}>
@@ -171,17 +223,81 @@ export default function ExplorePage() {
           )}
 
           {/* Pagination */}
-          <div className="flex items-center justify-center gap-2 mt-12">
-            <Button variant="outline" disabled>
-              Previous
-            </Button>
-            {[1, 2, 3, 4, 5].map((page) => (
-              <Button key={page} variant={page === 1 ? "default" : "outline"}>
-                {page}
+          {!loading && pagination.totalPages > 1 && (
+            <div className="flex items-center justify-center gap-2 mt-12">
+              <Button 
+                variant="outline" 
+                disabled={!pagination.hasPrev}
+                onClick={() => handlePageChange(pagination.currentPage - 1)}
+              >
+                Previous
               </Button>
-            ))}
-            <Button variant="outline">Next</Button>
-          </div>
+              
+              {/* Show page numbers with ellipsis for large page counts */}
+              {pagination.totalPages <= 7 ? (
+                // Show all pages if 7 or fewer
+                Array.from({ length: pagination.totalPages }, (_, i) => i + 1).map((page) => (
+                  <Button 
+                    key={page} 
+                    variant={page === pagination.currentPage ? "default" : "outline"}
+                    onClick={() => handlePageChange(page)}
+                  >
+                    {page}
+                  </Button>
+                ))
+              ) : (
+                // Show ellipsis for larger page counts
+                <>
+                  {/* First page */}
+                  <Button 
+                    variant={1 === pagination.currentPage ? "default" : "outline"}
+                    onClick={() => handlePageChange(1)}
+                  >
+                    1
+                  </Button>
+                  
+                  {/* Ellipsis if current page is far from start */}
+                  {pagination.currentPage > 3 && (
+                    <span className="px-2 py-2">...</span>
+                  )}
+                  
+                  {/* Pages around current page */}
+                  {Array.from({ length: 3 }, (_, i) => pagination.currentPage - 1 + i)
+                    .filter(page => page > 1 && page < pagination.totalPages)
+                    .map(page => (
+                      <Button 
+                        key={page} 
+                        variant={page === pagination.currentPage ? "default" : "outline"}
+                        onClick={() => handlePageChange(page)}
+                      >
+                        {page}
+                      </Button>
+                    ))}
+                  
+                  {/* Ellipsis if current page is far from end */}
+                  {pagination.currentPage < pagination.totalPages - 2 && (
+                    <span className="px-2 py-2">...</span>
+                  )}
+                  
+                  {/* Last page */}
+                  <Button 
+                    variant={pagination.totalPages === pagination.currentPage ? "default" : "outline"}
+                    onClick={() => handlePageChange(pagination.totalPages)}
+                  >
+                    {pagination.totalPages}
+                  </Button>
+                </>
+              )}
+              
+              <Button 
+                variant="outline" 
+                disabled={!pagination.hasNext}
+                onClick={() => handlePageChange(pagination.currentPage + 1)}
+              >
+                Next
+              </Button>
+            </div>
+          )}
         </div>
       </main>
     </>

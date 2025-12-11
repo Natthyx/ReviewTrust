@@ -43,6 +43,10 @@ export function ServiceClientWrapper({ business, reviews, businessHours }: Servi
   const [hasUserReviewed, setHasUserReviewed] = useState(false)
   const [userLikes, setUserLikes] = useState<Record<string, boolean>>({})
   const [userCommentLikes, setUserCommentLikes] = useState<Record<string, boolean>>({})
+  const [reviewsLoading, setReviewsLoading] = useState(false)
+  const [reviewsPage, setReviewsPage] = useState(1)
+  const [hasMoreReviews, setHasMoreReviews] = useState(true)
+  const reviewsPerPage = 5
 
   // Track view with real IP using server action
   useEffect(() => {
@@ -101,9 +105,13 @@ export function ServiceClientWrapper({ business, reviews, businessHours }: Servi
     loadUserData()
   }, [business.id])
 
-  // Fetch reviews real-time
-  useEffect(() => {
-    const fetchReviews = async () => {
+  // Fetch reviews with pagination
+  const fetchReviews = async (page: number = 1, append: boolean = false) => {
+    try {
+      if (append) {
+        setReviewsLoading(true)
+      }
+      
       const supabase = createClient()
       const { data, error } = await supabase
         .from('reviews')
@@ -125,6 +133,7 @@ export function ServiceClientWrapper({ business, reviews, businessHours }: Servi
         `)
         .eq('reviewee_id', business.id)
         .order('created_at', { ascending: false })
+        .range((page - 1) * reviewsPerPage, page * reviewsPerPage - 1)
 
       if (error) {
         console.error('Error fetching reviews:', error)
@@ -158,18 +167,38 @@ export function ServiceClientWrapper({ business, reviews, businessHours }: Servi
         }))
       }))
 
-      setLocalReviews(withReplyLikes)
+      if (append) {
+        setLocalReviews(prev => [...prev, ...withReplyLikes])
+      } else {
+        setLocalReviews(withReplyLikes)
+      }
+      
+      // Check if there are more reviews
+      setHasMoreReviews(data.length === reviewsPerPage)
+      setReviewsPage(page)
+    } catch (error) {
+      console.error('Error fetching reviews:', error)
+    } finally {
+      setReviewsLoading(false)
     }
+  }
 
-    fetchReviews()
+  // Load more reviews
+  const loadMoreReviews = () => {
+    fetchReviews(reviewsPage + 1, true)
+  }
+
+  // Fetch reviews real-time (updated version)
+  useEffect(() => {
+    fetchReviews(1, false)
 
     const supabase = createClient()
     const channel = supabase
       .channel('reviews-changes')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'reviews', filter: `reviewee_id=eq.${business.id}` }, fetchReviews)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'review_comments' }, fetchReviews)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'user_likes' }, fetchReviews)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'user_comment_likes' }, fetchReviews)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'reviews', filter: `reviewee_id=eq.${business.id}` }, () => fetchReviews(1, false))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'review_comments' }, () => fetchReviews(1, false))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'user_likes' }, () => fetchReviews(1, false))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'user_comment_likes' }, () => fetchReviews(1, false))
       .subscribe()
 
     return () => {
@@ -517,7 +546,19 @@ export function ServiceClientWrapper({ business, reviews, businessHours }: Servi
                   </div>
 
                   <div className="mt-8 text-center">
-                    <Button variant="outline">Load More Reviews</Button>
+                    {hasMoreReviews ? (
+                      <Button 
+                        variant="outline" 
+                        onClick={loadMoreReviews}
+                        disabled={reviewsLoading}
+                      >
+                        {reviewsLoading ? "Loading..." : "Load More Reviews"}
+                      </Button>
+                    ) : localReviews.length > 0 ? (
+                      <p className="text-muted-foreground">You've reached the end of reviews.</p>
+                    ) : (
+                      <p className="text-muted-foreground">No reviews yet. Be the first to review!</p>
+                    )}
                   </div>
                 </div>
               </div>

@@ -2,7 +2,6 @@ import { createClient } from '@supabase/supabase-js'
 import { Database } from '@/lib/supabase/database.types'
 import { NextResponse } from 'next/server'
 
-// Create a public client for read-only operations
 const createPublicClient = () => {
   return createClient<Database>(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -10,7 +9,6 @@ const createPublicClient = () => {
   )
 }
 
-// GET /api/categories - Fetch all categories and subcategories for public view
 export async function GET() {
   try {
     const supabase = createPublicClient()
