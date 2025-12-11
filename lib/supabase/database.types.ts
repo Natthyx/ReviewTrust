@@ -580,6 +580,41 @@ export type Database = {
           }
         ]
       }
+      business_images: {
+        Row: {
+          id: string
+          business_id: string
+          image_url: string
+          is_primary: boolean
+          created_at: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          id?: string
+          business_id: string
+          image_url: string
+          is_primary?: boolean
+          created_at?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          id?: string
+          business_id?: string
+          image_url?: string
+          is_primary?: boolean
+          created_at?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "business_images_business_id_fkey"
+            columns: ["business_id"]
+            isOneToOne: false
+            referencedRelation: "businesses"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
     }
     Views: {
       [_ in never]: never

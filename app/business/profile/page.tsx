@@ -56,6 +56,15 @@ interface BusinessDocument {
   status: string | null
 }
 
+interface BusinessImage {
+  id: string
+  business_id: string
+  image_url: string
+  is_primary: boolean
+  created_at: string | null
+  updated_at: string | null
+}
+
 interface FormData {
   business_name: string
   description: string
@@ -76,6 +85,9 @@ export default function BusinessProfile() {
   const [businessCategories, setBusinessCategories] = useState<BusinessCategory[]>([])
   const [businessSubcategories, setBusinessSubcategories] = useState<BusinessSubcategory[]>([])
   const [businessDocuments, setBusinessDocuments] = useState<BusinessDocument[]>([])
+  const [businessImages, setBusinessImages] = useState<BusinessImage[]>([])
+  const [uploading, setUploading] = useState(false)
+  const [primaryImageId, setPrimaryImageId] = useState<string | null>(null)
   const [expandedCategories, setExpandedCategories] = useState<Record<string, boolean>>({})
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -190,6 +202,21 @@ export default function BusinessProfile() {
           .select('id, document_name, document_url, uploaded_at, status')
           .eq('business_id', businessData.id)
         setBusinessDocuments(businessDocumentsData || [])
+
+        // Fetch business images
+        const { data: imagesData, error: imagesError } = await supabase
+          .from('business_images')
+          .select('*')
+          .eq('business_id', businessData.id)
+          .order('created_at', { ascending: false })
+
+        if (!imagesError && imagesData) {
+          setBusinessImages(imagesData)
+          const primaryImage = imagesData.find(img => img.is_primary)
+          if (primaryImage) {
+            setPrimaryImageId(primaryImage.id)
+          }
+        }
 
         setLoading(false)
       } catch (error) {
@@ -386,6 +413,115 @@ export default function BusinessProfile() {
       setError(`Failed to save: ${error.message}`)
     } finally {
       setSaving(false)
+    }
+  }
+
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!business || !e.target.files || e.target.files.length === 0) return
+
+    const file = e.target.files[0]
+    setUploading(true)
+    setError(null)
+
+    try {
+      // Create FormData
+      const formData = new FormData()
+      formData.append('file', file)
+
+      // Upload file using API route
+      const response = await fetch('/api/business/images/upload', {
+        method: 'POST',
+        body: formData,
+      })
+
+      const result = await response.json()
+
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to upload image')
+      }
+
+      // Update state
+      setBusinessImages(prev => [result, ...prev])
+      if (businessImages.length === 0) {
+        setPrimaryImageId(result.id)
+      }
+
+      setSuccess('Image uploaded successfully!')
+    } catch (error: any) {
+      console.error('Error uploading image:', error)
+      setError(`Failed to upload image: ${error.message}`)
+    } finally {
+      setUploading(false)
+      // Reset file input
+      if (e.target) {
+        e.target.value = ''
+      }
+    }
+  }
+
+  const handleDeleteImage = async (imageId: string, imageUrl: string) => {
+    try {
+      // Delete image using API route
+      const response = await fetch(`/api/business/images/${imageId}`, {
+        method: 'DELETE',
+      })
+
+      const result = await response.json()
+
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to delete image')
+      }
+
+      // Update state
+      setBusinessImages(prev => prev.filter(img => img.id !== imageId))
+      if (primaryImageId === imageId) {
+        setPrimaryImageId(null)
+        // Set new primary if there are remaining images
+        if (businessImages.length > 1) {
+          const newPrimary = businessImages.find(img => img.id !== imageId)
+          if (newPrimary) {
+            setPrimaryImageId(newPrimary.id)
+          }
+        }
+      }
+
+      setSuccess('Image deleted successfully!')
+    } catch (error: any) {
+      console.error('Error deleting image:', error)
+      setError(`Failed to delete image: ${error.message}`)
+    }
+  }
+
+  const handleSetPrimaryImage = async (imageId: string) => {
+    try {
+      // Update image using API route
+      const response = await fetch(`/api/business/images/${imageId}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ is_primary: true }),
+      })
+
+      const result = await response.json()
+
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to set primary image')
+      }
+
+      // Update state
+      setPrimaryImageId(imageId)
+      setBusinessImages(prev => 
+        prev.map(img => ({
+          ...img,
+          is_primary: img.id === imageId
+        }))
+      )
+
+      setSuccess('Primary image updated!')
+    } catch (error: any) {
+      console.error('Error setting primary image:', error)
+      setError(`Failed to set primary image: ${error.message}`)
     }
   }
 
@@ -694,6 +830,72 @@ export default function BusinessProfile() {
                       value={formData.businessHours}
                       onChange={(value) => setFormData(prev => ({ ...prev, businessHours: value }))}
                     />
+                  </div>
+                  
+                  {/* Image Upload Section */}
+                  <div>
+                    <Label className="text-sm font-medium">
+                      Business Images
+                    </Label>
+                    <div className="mt-2">
+                      <div className="flex items-center gap-4 mb-4">
+                        <Input
+                          type="file"
+                          accept="image/*"
+                          onChange={handleImageUpload}
+                          disabled={uploading}
+                          className="flex-1"
+                        />
+                        <Button 
+                          type="button" 
+                          disabled={uploading}
+                          variant="outline"
+                        >
+                          {uploading ? "Uploading..." : "Upload Image"}
+                        </Button>
+                      </div>
+                      
+                      {businessImages.length > 0 && (
+                        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 mt-4">
+                          {businessImages.map((image) => (
+                            <div key={image.id} className="relative group">
+                              <div className="relative aspect-square rounded-lg overflow-hidden border">
+                                <img 
+                                  src={image.image_url} 
+                                  alt="Business" 
+                                  className="w-full h-full object-cover"
+                                />
+                                {image.is_primary && (
+                                  <Badge className="absolute top-2 left-2">Primary</Badge>
+                                )}
+                              </div>
+                              <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+                                {!image.is_primary && (
+                                  <Button
+                                    type="button"
+                                    size="sm"
+                                    variant="default"
+                                    onClick={() => handleSetPrimaryImage(image.id)}
+                                    className="h-8 px-2 text-xs"
+                                  >
+                                    Make Primary
+                                  </Button>
+                                )}
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  variant="destructive"
+                                  onClick={() => handleDeleteImage(image.id, image.image_url)}
+                                  className="h-8 px-2 text-xs"
+                                >
+                                  Delete
+                                </Button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
                   </div>
                   
                   <div className="pt-4 border-t border-border flex gap-3">
