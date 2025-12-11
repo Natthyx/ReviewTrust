@@ -115,31 +115,21 @@ export default function AdminDashboard() {
 
   const fetchChartData = async () => {
     try {
-      // For chart data, we would need a dedicated API endpoint
-      // Return mock data for now as this would require a more complex API
-      const mockData = [
-        { day: "Mon", reviews: 120, businesses: 24 },
-        { day: "Tue", reviews: 200, businesses: 32 },
-        { day: "Wed", reviews: 150, businesses: 20 },
-        { day: "Thu", reviews: 220, businesses: 35 },
-        { day: "Fri", reviews: 280, businesses: 45 },
-        { day: "Sat", reviews: 190, businesses: 28 },
-        { day: "Sun", reviews: 140, businesses: 18 },
-      ]
-      
-      setChartData(mockData)
+      // Fetch chart data using API route
+      const response = await fetch('/api/admin/chart', {
+        headers: {
+          'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`
+        }
+      })
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch chart data')
+      }
+
+      const chartData = await response.json()
+      setChartData(chartData)
     } catch (error) {
       console.error('Error fetching chart data:', error)
-      // Return mock data as fallback
-      setChartData([
-        { day: "Mon", reviews: 120, businesses: 24 },
-        { day: "Tue", reviews: 200, businesses: 32 },
-        { day: "Wed", reviews: 150, businesses: 20 },
-        { day: "Thu", reviews: 220, businesses: 35 },
-        { day: "Fri", reviews: 280, businesses: 45 },
-        { day: "Sat", reviews: 190, businesses: 28 },
-        { day: "Sun", reviews: 140, businesses: 18 },
-      ])
     }
   }
 
@@ -246,7 +236,7 @@ export default function AdminDashboard() {
 
           {/* Activity Chart */}
           <Card className="p-6 mb-8">
-            <h3 className="font-semibold mb-4">Weekly Activity</h3>
+            <h3 className="font-semibold mb-4">Weekly Activity (Monday to Sunday)</h3>
             <ResponsiveContainer width="100%" height={300}>
               <BarChart data={chartData}>
                 <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
@@ -258,7 +248,9 @@ export default function AdminDashboard() {
                     border: "1px solid var(--color-border)",
                   }}
                 />
-                <Bar dataKey="reviews" fill="var(--color-primary)" radius={[8, 8, 0, 0]} />
+                <Bar dataKey="reviews" fill="#8884d8" name="Reviews" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="users" fill="#82ca9d" name="User Registrations" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="businesses" fill="#ffc658" name="Business Registrations" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </Card>
