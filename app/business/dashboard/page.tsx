@@ -46,6 +46,7 @@ export default function BusinessDashboard() {
   const [business, setBusiness] = useState<BusinessData | null>(null)
   const [reviews, setReviews] = useState<ReviewData[]>([])
   const [viewCount, setViewCount] = useState<number>(0)
+  const [viewsData, setViewsData] = useState<{ month: string; views: number }[]>([])
   const [loading, setLoading] = useState(true)
   const [showSetup, setShowSetup] = useState(false)
   const [setupData, setSetupData] = useState({
@@ -124,6 +125,63 @@ export default function BusinessDashboard() {
           if (!viewCountError && viewCountData !== null) {
             setViewCount(viewCountData)
           }
+          
+          // Fetch views data for the chart (last 6 months) - CORRECTED VERSION
+          const now = new Date()
+          const sixMonthsAgo = new Date()
+          sixMonthsAgo.setMonth(now.getMonth() - 5)
+          sixMonthsAgo.setDate(1)
+          sixMonthsAgo.setHours(0, 0, 0, 0)
+
+          const { data: viewsDataResult, error: viewsDataError } = await supabase
+            .from('business_views')
+            .select('viewed_at')
+            .eq('business_id', businessData.id)
+            .gte('viewed_at', sixMonthsAgo.toISOString())
+          
+          if (!viewsDataError) {
+            // Define correct month order
+            const monthOrder = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+
+            // Initialize all 6 months with 0
+            const monthlyViews: Record<string, number> = {}
+            for (let i = 5; i >= 0; i--) {
+              const date = new Date(now)
+              date.setMonth(now.getMonth() - i)
+              const monthKey = date.toLocaleString('default', { month: 'short' })
+              monthlyViews[monthKey] = 0
+            }
+
+            // Count actual views
+            viewsDataResult?.forEach(view => {
+              if (view.viewed_at) {
+                const month = new Date(view.viewed_at).toLocaleString('default', { month: 'short' })
+                if (monthlyViews.hasOwnProperty(month)) {
+                  monthlyViews[month]++
+                }
+              }
+            })
+
+            // Convert to ordered array
+            const chartData = Object.entries(monthlyViews)
+              .map(([month, views]) => ({ month, views }))
+              .sort((a, b) => {
+                // Sort by month order, but show newest first
+                const now = new Date()
+                const aIndex = monthOrder.indexOf(a.month)
+                const bIndex = monthOrder.indexOf(b.month)
+                const currentIndex = now.getMonth()
+                
+                // Adjust indices to handle year wrap-around
+                const aAdjusted = aIndex <= currentIndex ? aIndex + 12 : aIndex
+                const bAdjusted = bIndex <= currentIndex ? bIndex + 12 : bIndex
+                
+                return bAdjusted - aAdjusted
+              })
+
+            setViewsData(chartData)
+            setViewCount(viewsDataResult?.length || 0)
+          }
         }
 
         setLoading(false)
@@ -190,15 +248,6 @@ export default function BusinessDashboard() {
     { stars: 3, count: reviews.filter(r => r.rating === 3).length },
     { stars: 2, count: reviews.filter(r => r.rating === 2).length },
     { stars: 1, count: reviews.filter(r => r.rating === 1).length },
-  ]
-
-  const viewsData = [
-    { month: "Jan", views: 2400, clicks: 1240 },
-    { month: "Feb", views: 2210, clicks: 1221 },
-    { month: "Mar", views: 2290, clicks: 1229 },
-    { month: "Apr", views: 2000, clicks: 2200 },
-    { month: "May", views: 2181, clicks: 2500 },
-    { month: "Jun", views: 2500, clicks: 2100 },
   ]
 
   const COLORS = ["#FCD34D", "#DBEAFE", "#FCA5A5", "#D1D5DB", "#9CA3AF"]
@@ -364,7 +413,7 @@ export default function BusinessDashboard() {
             </Card>
 
             <Card className="p-6 lg:col-span-2">
-              <h3 className="font-semibold mb-4">Profile Views & Clicks</h3>
+              <h3 className="font-semibold mb-4">Profile Views</h3>
               <ResponsiveContainer width="100%" height={250}>
                 <LineChart data={viewsData}>
                   <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
@@ -376,8 +425,13 @@ export default function BusinessDashboard() {
                       border: "1px solid var(--color-border)",
                     }}
                   />
-                  <Line type="monotone" dataKey="views" stroke="var(--color-primary)" strokeWidth={2} />
-                  <Line type="monotone" dataKey="clicks" stroke="var(--color-accent)" strokeWidth={2} />
+                  <Line 
+                    type="monotone" 
+                    dataKey="views" 
+                    stroke="var(--color-primary)" 
+                    strokeWidth={2} 
+                    activeDot={{ r: 8 }} 
+                  />
                 </LineChart>
               </ResponsiveContainer>
             </Card>
