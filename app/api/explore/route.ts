@@ -64,7 +64,20 @@ export async function GET(request: Request) {
       .select('reviewee_id, rating')
       .in('reviewee_id', businessIds)
 
-    // Step 4: Calculate rating and review count per business
+    // Step 4: Fetch primary images for these businesses
+    const { data: businessImages } = await supabase
+      .from('business_images')
+      .select('business_id, image_url')
+      .in('business_id', businessIds)
+      .eq('is_primary', true)
+
+    // Create a map of business_id to primary image URL
+    const imageMap = new Map<string, string>()
+    businessImages?.forEach(img => {
+      imageMap.set(img.business_id, img.image_url)
+    })
+
+    // Step 5: Calculate rating and review count per business
     const statsMap = new Map<string, { total: number; count: number }>()
 
     allReviews?.forEach(review => {
@@ -74,7 +87,7 @@ export async function GET(request: Request) {
       statsMap.set(review.reviewee_id, entry)
     })
 
-    // Step 5: Build final response
+    // Step 6: Build final response
     const processed = filteredBusinesses.map(business => {
       const stats = statsMap.get(business.id) || { total: 0, count: 0 }
       const averageRating = stats.count > 0 
@@ -87,11 +100,12 @@ export async function GET(request: Request) {
         location: business.location || '',
         description: business.description || '',
         rating: averageRating,
-        reviewCount: stats.count
+        reviewCount: stats.count,
+        imageUrl: imageMap.get(business.id) || '/placeholder-service-image.svg' // Add image URL
       }
     })
 
-    // Step 6: Sort results
+    // Step 7: Sort results
     processed.sort((a, b) => {
       if (sortBy === 'reviews') {
         return b.reviewCount - a.reviewCount

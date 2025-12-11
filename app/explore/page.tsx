@@ -13,7 +13,7 @@ import { useSearchParams } from 'next/navigation'
 interface Service {
   id: string
   name: string
-  image: string
+  imageUrl: string
   category: string
   rating: number
   reviewCount: number
@@ -57,7 +57,7 @@ export default function ExplorePage() {
       const transformedServices = data.map((business: any) => ({
         id: business.id,
         name: business.name,
-        image: "/placeholder-service-image.svg", // Placeholder image
+        imageUrl: business.imageUrl || "/placeholder-service-image.svg", // Use real image URL
         category: "Service", // Default category
         rating: business.rating || 0,
         reviewCount: business.reviewCount || 0,

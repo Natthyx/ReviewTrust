@@ -25,7 +25,7 @@ export default function HomePage() {
       category: "Healthcare",
       rating: 4.9,
       reviewCount: 124,
-      image: "/service-images/dental.jpg",
+      imageUrl: "/service-images/dental.jpg",
     },
     {
       id: "2",
@@ -33,15 +33,15 @@ export default function HomePage() {
       category: "Restaurants",
       rating: 4.7,
       reviewCount: 89,
-      image: "/service-images/restaurant.jpg",
+      imageUrl: "/service-images/restaurant.jpg",
     },
     {
       id: "3",
-      name: "AutoCare Pro",
-      category: "Automotive",
+      name: "Tech Solutions Pro",
+      category: "Technology",
       rating: 4.8,
       reviewCount: 67,
-      image: "/service-images/auto.jpg",
+      imageUrl: "/service-images/technology.jpg",
     },
   ]
 

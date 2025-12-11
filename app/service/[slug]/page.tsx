@@ -28,6 +28,7 @@ type Business = {
   updatedAt: string | null
   categories: { id: string; name: string; icon: string | null; bg_color: string | null }[]
   subcategories: { id: string; name: string }[]
+  images: { id: string; image_url: string; is_primary: boolean }[]
 }
 
 // Fetch business data
@@ -131,7 +132,20 @@ async function getBusinessData(slug: string): Promise<{business: Business | null
       createdAt: business.created_at,
       updatedAt: business.updated_at,
       categories: business.business_categories.map((bc: any) => bc.categories),
-      subcategories: business.business_subcategories.map((bs: any) => bs.subcategories)
+      subcategories: business.business_subcategories.map((bs: any) => bs.subcategories),
+      images: [] // Will be populated below
+    }
+    
+    // Fetch business images
+    const { data: imagesData, error: imagesError } = await supabase
+      .from('business_images')
+      .select('id, image_url, is_primary')
+      .eq('business_id', slug)
+      .order('is_primary', { ascending: false })
+      .order('created_at', { ascending: true })
+    
+    if (!imagesError && imagesData) {
+      processedBusiness.images = imagesData
     }
     
     return {business: processedBusiness, reviews}

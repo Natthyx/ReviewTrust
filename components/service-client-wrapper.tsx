@@ -9,7 +9,6 @@ import { ReviewCard } from "@/components/review-card"
 import { RatingStars } from "@/components/rating-stars"
 import { Badge } from "@/components/ui/badge"
 import { MapPin, Phone, Globe, Clock, ChevronDown } from "lucide-react"
-import Image from "next/image"
 import { Navbar } from "@/components/navbar"
 import { toast } from "sonner"
 import { Review } from "@/types/review"
@@ -30,6 +29,7 @@ interface Business {
   updatedAt: string | null
   categories: { id: string; name: string; icon: string | null; bg_color: string | null }[]
   subcategories: { id: string; name: string }[]
+  images: { id: string; image_url: string; is_primary: boolean }[] // Add images property
 }
 
 interface ServiceClientWrapperProps {
@@ -356,23 +356,55 @@ export function ServiceClientWrapper({ business, reviews, businessHours }: Servi
         {/* Hero & Images */}
         <section className="bg-muted">
           <div className="container-app py-8">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
-              <div className="md:col-span-2 relative h-96 rounded-lg overflow-hidden">
-                <Image src="/placeholder-service-image.svg" alt={business.name} fill className="object-cover" />
+            {business.images && business.images.length > 0 ? (
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+                {/* Primary image or first image */}
+                <div className="md:col-span-2 relative h-96 rounded-lg overflow-hidden">
+                  <img 
+                    src={business.images.find(img => img.is_primary)?.image_url || business.images[0].image_url} 
+                    alt={business.name} 
+                    className="w-full h-full object-cover"
+                  />
+                </div>
+                {/* Other images */}
+                <div className="grid grid-cols-2 gap-4">
+                  {business.images
+                    .filter((_, index) => index < 4) // Limit to 4 images total (1 primary + 3 others)
+                    .slice(1, 4) // Skip the first (primary) image
+                    .map((image, index) => (
+                      <div key={image.id} className="relative h-[180px] rounded-lg overflow-hidden">
+                        <img
+                          src={image.image_url}
+                          alt={`${business.name} Gallery ${index + 1}`}
+                          className="w-full h-full object-cover hover:scale-105 transition-transform cursor-pointer"
+                        />
+                      </div>
+                    ))}
+                  {/* If we have fewer than 4 images, show placeholders */}
+                  {business.images.length < 4 && 
+                    Array.from({ length: 4 - business.images.length }).map((_, index) => (
+                      <div key={`placeholder-${index}`} className="relative h-[180px] rounded-lg overflow-hidden bg-gray-200 flex items-center justify-center">
+                        <span className="text-gray-500">No image</span>
+                      </div>
+                    ))
+                  }
+                </div>
               </div>
-              <div className="grid grid-cols-2 gap-4">
-                {[1, 2, 3, 4].map((i) => (
-                  <div key={i} className="relative h-[180px] rounded-lg overflow-hidden">
-                    <Image
-                      src={`/placeholder-service-image.svg?height=180&width=180&query=service-${i}`}
-                      alt={`${business.name} Gallery ${i}`}
-                      fill
-                      className="object-cover hover:scale-105 transition-transform cursor-pointer"
-                    />
-                  </div>
-                ))}
+            ) : (
+              // Fallback to placeholder images if no business images
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+                <div className="md:col-span-2 relative h-96 rounded-lg overflow-hidden bg-gray-200 flex items-center justify-center">
+                  <span className="text-gray-500">No primary image</span>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  {[1, 2, 3].map((i) => (
+                    <div key={i} className="relative h-[180px] rounded-lg overflow-hidden bg-gray-200 flex items-center justify-center">
+                      <span className="text-gray-500">No image</span>
+                    </div>
+                  ))}
+                </div>
               </div>
-            </div>
+            )}
           </div>
         </section>
 
